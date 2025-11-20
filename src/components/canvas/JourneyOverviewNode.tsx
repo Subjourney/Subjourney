@@ -6,8 +6,8 @@
 
 import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
+import { Circle, Square } from '@phosphor-icons/react';
 import { useJourneySizeMeasurement } from '../../hooks/useJourneySizeMeasurement';
-import { useSelection } from '../../store';
 import type { Journey, Phase, Step } from '../../types';
 import type { NodeProps } from '@xyflow/react';
 
@@ -21,8 +21,7 @@ interface JourneyOverviewNodeData {
 }
 
 export function JourneyOverviewNode(props: NodeProps) {
-  const { id, data, selected } = props;
-  const { selectedJourney, select } = useSelection();
+  const { id, data } = props;
   const nodeId = String(id);
   const { containerRef, size } = useJourneySizeMeasurement(nodeId);
   const [hoveredPhase, setHoveredPhase] = useState<string | null>(null);
@@ -30,11 +29,9 @@ export function JourneyOverviewNode(props: NodeProps) {
   
   const nodeData = (data as unknown as JourneyOverviewNodeData);
   const { journey, phases = [], steps = [], onJourneyClick, onPhaseClick, onStepClick } = nodeData;
-  const isSelected = selected || (selectedJourney !== null && String(selectedJourney) === id);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    select('selectedJourney', id);
     if (onJourneyClick) {
       onJourneyClick();
     }
@@ -62,17 +59,15 @@ export function JourneyOverviewNode(props: NodeProps) {
   return (
     <div
       ref={containerRef}
-      className={`journey-overview-node ${isSelected ? 'selected' : ''}`}
+      className="journey-overview-node"
       style={{
         width: 'fit-content',
         height: 'auto',
         minWidth: '300px',
         background: 'var(--surface-2)',
-        border: isSelected ? 'var(--border-selected)' : 'var(--border-default)',
+        border: 'var(--border-default)',
         borderRadius: 'var(--radius-lg)',
-        boxShadow: isSelected
-          ? 'var(--shadow-selected)'
-          : 'var(--shadow-md)',
+        boxShadow: 'var(--shadow-md)',
         cursor: 'default',
         position: 'relative',
         '--measured-width': `${size.width}px`,
@@ -90,8 +85,8 @@ export function JourneyOverviewNode(props: NodeProps) {
       {/* Journey Header */}
       <div
         style={{
-          background: 'var(--surface-1)',
-          padding: 'var(--spacing-sm) var(--spacing-md)',
+          background: 'var(--surface-3)',
+          padding: 'var(--spacing-sm) 10px 10px 12px',
           borderBottom: 'var(--border-divider)',
           display: 'flex',
           alignItems: 'center',
@@ -119,7 +114,8 @@ export function JourneyOverviewNode(props: NodeProps) {
             fontSize: 'var(--font-size-xs)',
             padding: '2px 6px',
             borderRadius: 'var(--radius-sm)',
-            background: 'var(--surface-2)',
+            border: 'var(--border-default)',
+            background: 'var(--surface-5)',
             color: 'var(--color-text-secondary)',
           }}
         >
@@ -149,7 +145,7 @@ export function JourneyOverviewNode(props: NodeProps) {
             style={{
               textAlign: 'center',
               padding: 'var(--spacing-md)',
-              color: 'var(--color-text-tertiary)',
+              color: 'var(--color-text-primary)',
               fontSize: 'var(--font-size-sm)',
             }}
           >
@@ -170,7 +166,7 @@ export function JourneyOverviewNode(props: NodeProps) {
                       alignItems: 'center',
                       gap: 'var(--spacing-sm)',
                       height: '40px',
-                      padding: '0 var(--spacing-md)',
+                      padding: '0 10px',
                       borderBottom: isLastPhase && phaseSteps.length === 0 ? 'none' : 'var(--border-divider)',
                       cursor: 'pointer',
                       background:
@@ -183,11 +179,19 @@ export function JourneyOverviewNode(props: NodeProps) {
                     onMouseLeave={() => setHoveredPhase(null)}
                     onClick={(e) => handlePhaseClick(phase.id, e)}
                   >
+                    <Square
+                      size={14}
+                      weight={hoveredPhase === phase.id ? 'fill' : 'regular'}
+                      color={phase.color || '#3B82F6'}
+                      style={{
+                        flexShrink: 0,
+                      }}
+                    />
                     <span
                       style={{
                         fontSize: 'var(--font-size-sm)',
-                        fontWeight: 'var(--font-weight-semibold)',
-                        color: 'var(--color-text-tertiary)',
+                        fontWeight: 'var(--font-weight-regular)',
+                        color: hoveredPhase === phase.id ? phase.color || '#3B82F6' : 'var(--color-text-tertiary)',
                         flex: 1,
                       }}
                     >
@@ -218,8 +222,8 @@ export function JourneyOverviewNode(props: NodeProps) {
                           alignItems: 'center',
                           gap: 'var(--spacing-sm)',
                           height: '40px',
-                          paddingLeft: 'var(--spacing-md)',
-                          paddingRight: 'var(--spacing-md)',
+                          paddingLeft: '20px',
+                          paddingRight: '20px',
                           borderBottom: isLastStepInLastPhase ? 'none' : 'var(--border-divider)',
                           cursor: 'pointer',
                           background:
@@ -232,13 +236,11 @@ export function JourneyOverviewNode(props: NodeProps) {
                         onMouseLeave={() => setHoveredStep(null)}
                         onClick={(e) => handleStepClick(step.id, e)}
                       >
-                        <div
+                        <Circle
+                          size={14}
+                          weight={hoveredStep === step.id ? 'fill' : 'regular'}
+                          color={phase.color || '#3B82F6'}
                           style={{
-                            width: '14px',
-                            height: '14px',
-                            borderRadius: '50%',
-                            border: `var(--border-width-md) var(--border-style) ${phase.color || '#3B82F6'}`,
-                            background: hoveredStep === step.id ? phase.color || '#3B82F6' : 'transparent',
                             flexShrink: 0,
                           }}
                         />

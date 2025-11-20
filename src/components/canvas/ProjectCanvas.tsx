@@ -3,7 +3,7 @@
  * Main React Flow canvas for rendering journey overview nodes directly
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, memo } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -20,16 +20,17 @@ import {
 import '@xyflow/react/dist/base.css';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
 import { StepToSubjourneyEdge } from './StepToSubjourneyEdge';
+import { applyDagreLayout } from './layout';
 import { useSelection } from '../../store';
 import type { Project, Journey, Phase, Step } from '../../types';
 import { useNavigate } from 'react-router-dom';
 
 const nodeTypes = {
-  'journey-overview-node': JourneyOverviewNode,
+  'journey-overview-node': memo(JourneyOverviewNode),
 };
 
 const edgeTypes = {
-  'step-to-subjourney': StepToSubjourneyEdge,
+  'step-to-subjourney': memo(StepToSubjourneyEdge),
 };
 
 const proOptions = { hideAttribution: true };
@@ -43,6 +44,7 @@ interface ProjectCanvasInnerProps {
   onJourneyClick?: (journeyId: string) => void;
   onPhaseClick?: (phaseId: string) => void;
   onStepClick?: (stepId: string) => void;
+  backgroundDotColor?: string; // Color for the canvas background dots
 }
 
 function ProjectCanvasInner({
@@ -54,10 +56,21 @@ function ProjectCanvasInner({
   onJourneyClick,
   onPhaseClick,
   onStepClick,
+  backgroundDotColor, // Color for canvas background dots (defaults to CSS variable)
 }: ProjectCanvasInnerProps) {
   const { clearSelection, select } = useSelection();
   const { fitView } = useReactFlow();
   const navigate = useNavigate();
+
+  // Get default background dot color from CSS variable
+  const defaultDotColor = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const root = document.documentElement;
+      const computedColor = getComputedStyle(root).getPropertyValue('--canvas-dot-color').trim();
+      return computedColor || 'rgba(255, 255, 255, 0.15)';
+    }
+    return 'rgba(255, 255, 255, 0.15)';
+  }, []);
 
   const handleJourneyClick = useCallback(
     (journeyId: string) => {
@@ -166,6 +179,9 @@ function ProjectCanvasInner({
       journeyStepsMap.set(journey.id, allSteps);
     });
 
+    // Get parent journeys list for finding next journey
+    const parentJourneys = journeys.filter((j) => !j.is_subjourney);
+
     // Create edges from final step of subjourneys to next sequential step in parent journey
     journeys.forEach((subjourney) => {
       if (subjourney.is_subjourney && subjourney.parent_step_id) {
@@ -181,27 +197,58 @@ function ProjectCanvasInner({
           // Find the parent step and get its index
           const parentStepIndex = parentSteps.findIndex(step => step.id === parentStepId);
           
-          // Find the next sequential step after the parent step
-          if (finalSubjourneyStep && parentStepIndex >= 0 && parentStepIndex < parentSteps.length - 1) {
-            const nextStep = parentSteps[parentStepIndex + 1];
-            
-            flowEdges.push({
-              id: `edge-subjourney-${subjourney.id}-final-step-to-${nextStep.id}`,
-              source: subjourney.id,
-              sourceHandle: `step-${finalSubjourneyStep.id}-left`, // Left handle of final step in subjourney
-              target: parentJourneyId,
-              targetHandle: `step-${nextStep.id}-target`, // Target handle on right side of next step in parent
-              type: 'default', // Use smoothstep instead of custom edge to get correct handle positions
-              style: {
-                stroke: '#6B7280',
-                strokeWidth: 2,
-                strokeDasharray: '5,5',
-              },
-              markerEnd: {
-                type: MarkerType.ArrowClosed,
-                color: '#6B7280',
-              },
-            });
+          if (finalSubjourneyStep && parentStepIndex >= 0) {
+            // Case 1: There's a next step in the parent journey
+            if (parentStepIndex < parentSteps.length - 1) {
+              const nextStep = parentSteps[parentStepIndex + 1];
+              
+              flowEdges.push({
+                id: `edge-subjourney-${subjourney.id}-final-step-to-${nextStep.id}`,
+                source: subjourney.id,
+                sourceHandle: `step-${finalSubjourneyStep.id}-left`, // Left handle of final step in subjourney
+                target: parentJourneyId,
+                targetHandle: `step-${nextStep.id}-target`, // Target handle on right side of next step in parent
+                type: 'default',
+                style: {
+                  stroke: '#6B7280',
+                  strokeWidth: 2,
+                  strokeDasharray: '5,5',
+                },
+                markerEnd: {
+                  type: MarkerType.ArrowClosed,
+                  color: '#6B7280',
+                },
+              });
+            } 
+            // Case 2: Parent step is the last step - connect to first step of next top-level journey
+            else {
+              const parentJourneyIndex = parentJourneys.findIndex(j => j.id === parentJourneyId);
+              if (parentJourneyIndex >= 0 && parentJourneyIndex < parentJourneys.length - 1) {
+                const nextJourney = parentJourneys[parentJourneyIndex + 1];
+                const nextJourneySteps = journeyStepsMap.get(nextJourney.id) || [];
+                const firstStepOfNextJourney = nextJourneySteps[0];
+                
+                if (firstStepOfNextJourney) {
+                  flowEdges.push({
+                    id: `edge-subjourney-${subjourney.id}-final-step-to-next-journey-${nextJourney.id}-first-step`,
+                    source: subjourney.id,
+                    sourceHandle: `step-${finalSubjourneyStep.id}-left`, // Left handle of final step in subjourney
+                    target: nextJourney.id,
+                    targetHandle: `step-${firstStepOfNextJourney.id}-target`, // Target handle on right side of first step in next journey
+                    type: 'default',
+                    style: {
+                      stroke: '#6B7280',
+                      strokeWidth: 2,
+                      strokeDasharray: '5,5',
+                    },
+                    markerEnd: {
+                      type: MarkerType.ArrowClosed,
+                      color: '#6B7280',
+                    },
+                  });
+                }
+              }
+            }
           }
         }
       }
@@ -209,7 +256,7 @@ function ProjectCanvasInner({
 
     // Create edges connecting top-level journeys in sequence
     // Connect bottom of each journey to top of the next one
-    const parentJourneys = journeys.filter((j) => !j.is_subjourney);
+    // (parentJourneys already defined above)
     for (let i = 0; i < parentJourneys.length - 1; i++) {
       const currentJourney = parentJourneys[i];
       const nextJourney = parentJourneys[i + 1];
@@ -219,10 +266,11 @@ function ProjectCanvasInner({
         sourceHandle: `journey-${currentJourney.id}-bottom`, // Bottom handle of current journey
         target: nextJourney.id,
         targetHandle: `journey-${nextJourney.id}-top`, // Top handle of next journey
-        type: 'smoothstep',
+        type: 'default',
         style: {
           stroke: '#6B7280',
           strokeWidth: 2,
+          strokeDasharray: '5,5',
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -236,58 +284,130 @@ function ProjectCanvasInner({
     const nodeById = new Map<string, Node>();
     flowNodes.forEach((n) => nodeById.set(n.id, n));
 
-    // Group subjourney nodes by their parent journey id
-    const parentToSubNodes = new Map<string, Node[]>();
+    // Group subjourney nodes by their parent journey id, keeping the parent step order
+    const parentToSubNodes = new Map<string, Array<{ node: Node; parentStepIndex: number }>>();
     journeys.forEach((j) => {
       if (j.is_subjourney && j.parent_step_id) {
         const parentJourneyId = stepIdToJourneyId.get(j.parent_step_id);
         if (parentJourneyId) {
           const subNode = nodeById.get(j.id);
           if (subNode) {
+            const parentSteps = journeyStepsMap.get(parentJourneyId) || [];
+            const idx = parentSteps.findIndex((s) => s.id === j.parent_step_id);
             const arr = parentToSubNodes.get(parentJourneyId) || [];
-            arr.push(subNode);
+            arr.push({ node: subNode, parentStepIndex: idx >= 0 ? idx : Number.MAX_SAFE_INTEGER });
             parentToSubNodes.set(parentJourneyId, arr);
           }
         }
       }
     });
 
-    // Layout params
+    // Layout params - reduced vertical spacing
     const marginX = 50;
     const marginY = 50;
-    const horizontalGap = 120;
-    const verticalGap = 40;
-    const blockGap = 80; // gap between different parent blocks
+    const horizontalGap = 100;
+    const verticalGap = 60; // Reduced from 40
 
-    // Order parents as they appear (already filtered above)
+    // Use Dagre layout for parent journeys (zoom-compensated rank separation)
+    // Create temporary edges between parent journeys for Dagre layout
+    const parentJourneyEdges: Edge[] = [];
+    for (let i = 0; i < parentJourneys.length - 1; i++) {
+      parentJourneyEdges.push({
+        id: `temp-edge-${parentJourneys[i].id}-${parentJourneys[i + 1].id}`,
+        source: parentJourneys[i].id,
+        target: parentJourneys[i + 1].id,
+      });
+    }
 
-    let currentY = marginY;
-    parentJourneys.forEach((parent) => {
-      const parentNode = nodeById.get(parent.id);
-      if (!parentNode) return;
+    // Get parent journey nodes only
+    const parentJourneyNodes = parentJourneys
+      .map((j) => nodeById.get(j.id))
+      .filter((n): n is Node => n !== undefined);
 
-      // Parent position (left column)
-      parentNode.position = { x: marginX, y: currentY };
+    // Apply Dagre layout to parent journeys with zoom-compensated rank separation
+    const layoutedParentNodes = applyDagreLayout(parentJourneyNodes, parentJourneyEdges, {
+      direction: 'TB',
+      nodeSep: 50,
+      rankSep: 260, // Reduced vertical separation (zoom-compensated via data attributes)
+      marginX,
+      marginY,
+    });
 
-      const subNodes = parentToSubNodes.get(parent.id) || [];
+    // Update parent node positions from Dagre layout
+    layoutedParentNodes.nodes.forEach((layoutedNode) => {
+      const originalNode = nodeById.get(layoutedNode.id);
+      if (originalNode) {
+        originalNode.position = layoutedNode.position;
+      }
+    });
 
-      // Place subjourneys to the right, stacked vertically
-      const parentRightX = (parentNode.position?.x || 0) + (parentNode.width || 300);
-      let subCurrentY = parentNode.position.y;
-      subNodes.forEach((sn) => {
+    // Helper function to get measured size from data attributes (zoom-compensated)
+    const getMeasuredSize = (node: Node): { width: number; height: number } => {
+      let width = node.width || 300;
+      let height = node.height || 250;
+      
+      // Try to get measured size from data attributes (zoom-independent)
+      if (node.data && typeof node.id === 'string') {
+        const nodeElement = document.querySelector(`[data-journey-id="${node.id}"]`);
+        if (nodeElement) {
+          const measuredWidth = nodeElement.getAttribute('data-width');
+          const measuredHeight = nodeElement.getAttribute('data-height');
+          if (measuredWidth) width = parseInt(measuredWidth, 10);
+          if (measuredHeight) height = parseInt(measuredHeight, 10);
+        }
+      }
+      
+      return { width, height };
+    };
+
+    // Recursive positioning of subjourneys for any parent (supports nested subjourneys)
+    const positionSubjourneysRecursive = (parentNode: Node, parentJourneyId: string) => {
+      const parentSize = getMeasuredSize(parentNode);
+      const subNodesWithIndex = parentToSubNodes.get(parentJourneyId) || [];
+      if (subNodesWithIndex.length === 0) return;
+
+      // Sort subjourneys by their parent step's order
+      const sortedSubNodes = [...subNodesWithIndex].sort((a, b) => a.parentStepIndex - b.parentStepIndex);
+
+      // X position for direct children of this parent
+      const parentRightX = (parentNode.position?.x || 0) + parentSize.width;
+
+      // Compute total height of subjourney stack to center relative to this parent (using measured sizes)
+      const subsTotalHeightForCentering =
+        sortedSubNodes.reduce(
+          (sum, { node: sn }, idx) => {
+            const subSize = getMeasuredSize(sn);
+            return sum + subSize.height + (idx > 0 ? verticalGap : 0);
+          },
+          0
+        ) || 0;
+
+      const parentCenterY = (parentNode.position?.y || 0) + parentSize.height / 2;
+      let subCurrentY =
+        subsTotalHeightForCentering > 0
+          ? parentCenterY - subsTotalHeightForCentering / 2
+          : (parentNode.position?.y || 0);
+
+      // Place direct children
+      sortedSubNodes.forEach(({ node: sn }) => {
+        const subSize = getMeasuredSize(sn);
         sn.position = {
           x: parentRightX + horizontalGap,
           y: subCurrentY,
         };
-        subCurrentY += (sn.height || 250) + verticalGap;
-      });
+        subCurrentY += subSize.height + verticalGap;
 
-      // Advance Y for next parent block - consider tallest of parent vs subjourney stack
-      const parentHeight = parentNode.height || 300;
-      const subsTotalHeight =
-        subNodes.reduce((sum, sn, idx) => sum + (sn.height || 250) + (idx > 0 ? verticalGap : 0), 0) || 0;
-      const blockHeight = Math.max(parentHeight, subsTotalHeight);
-      currentY += blockHeight + blockGap;
+        // Recurse to place grandchildren to the right of this subjourney
+        positionSubjourneysRecursive(sn, String(sn.id));
+      });
+    };
+
+    // Position subjourneys for each top-level parent; recursion handles deeper levels
+    parentJourneys.forEach((parent) => {
+      const parentNode = nodeById.get(parent.id);
+      if (parentNode) {
+        positionSubjourneysRecursive(parentNode, parent.id);
+      }
     });
 
     return { nodes: flowNodes, edges: flowEdges };
@@ -351,10 +471,13 @@ function ProjectCanvasInner({
       fitView
       proOptions={proOptions}
       minZoom={0.1}
-      maxZoom={1.2}
+      maxZoom={2}
       attributionPosition="bottom-left"
+      panOnScroll={true}
+      selectionOnDrag={true}
+      panOnDrag={false}
     >
-      <Background />
+      <Background color={backgroundDotColor || defaultDotColor} />
       <Controls />
     </ReactFlow>
   );

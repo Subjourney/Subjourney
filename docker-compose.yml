@@ -142,28 +142,28 @@ services:
       - subjourney-network
 
   # Backend API service (Python/FastAPI)
-  # NOTE: Update the volume mount to point to your backend directory
+  # NOTE: Connects to Supabase CLI instance running on host
   backend:
     image: python:3.11-slim
     container_name: subjourney-backend
     working_dir: /app
-    # Note: Supabase is managed via Supabase CLI, not docker-compose
-    # Ensure Supabase is running: supabase start
     ports:
       - '8001:8001'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       PYTHONUNBUFFERED: 1
       PORT: 8001
       RELOAD: 'true'
       ENVIRONMENT: 'local_supabase'
       DOCKER_ENV: 'true'
-      # Database connection
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-your-super-secret-password}@supabase-db:5432/postgres
-      # Supabase configuration (connect to Supabase CLI running on host)
+      # Database connection (Supabase CLI on host)
+      DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:54322/postgres
+      # Supabase configuration (connect to Supabase CLI on host)
       SUPABASE_URL: http://host.docker.internal:54321
       SUPABASE_ANON_KEY: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU}
-      SUPABASE_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters-long}
+      SUPABASE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
       # Optional: ChromaDB if needed
       # CHROMA_HOST: chromadb
       # CHROMA_PORT: 8000

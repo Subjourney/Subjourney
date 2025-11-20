@@ -401,8 +401,8 @@ def create_subjourney(
     phases_data = subjourney_data.get("phases", [])
     phase_map = create_phases(supabase, team_id, subjourney_id, phases_data)
     
-    # Create steps for subjourney (no nested subjourneys in this implementation)
-    step_map, _ = create_steps(
+    # Create steps for subjourney and collect nested subjourney info
+    step_map, nested_subjourney_info = create_steps(
         supabase,
         team_id,
         phase_map,
@@ -412,7 +412,26 @@ def create_subjourney(
         project_id
     )
     
-    print_success(f"Subjourney created with {len(phase_map)} phases and {len(step_map)} steps")
+    # Recursively create nested subjourneys
+    nested_count = 0
+    for step_name, nested_subj_info in nested_subjourney_info.items():
+        print()
+        print_step(f"Creating nested subjourney for step: {step_name}")
+        nested_subjourney_id = create_subjourney(
+            supabase,
+            team_id,
+            project_id,
+            nested_subj_info["step_id"],
+            nested_subj_info["subjourney_data"],
+            attribute_map
+        )
+        if nested_subjourney_id:
+            nested_count += 1
+    
+    if nested_count > 0:
+        print_success(f"Subjourney created with {len(phase_map)} phases, {len(step_map)} steps, and {nested_count} nested subjourney(s)")
+    else:
+        print_success(f"Subjourney created with {len(phase_map)} phases and {len(step_map)} steps")
     return subjourney_id
 
 

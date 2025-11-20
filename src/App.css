@@ -52,8 +52,9 @@
   --color-text-primary: rgba(255, 255, 255, 0.87);
   --color-text-secondary: rgba(255, 255, 255, 0.6);
   --color-text-tertiary: rgba(255, 255, 255, 0.4);
-  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border: rgba(255, 255, 255, 0.05);
   --color-border-hover: rgba(255, 255, 255, 0.2);
+  --canvas-dot-color: rgba(255, 255, 255, 0.3);
 
   /* Dark Variants */
   --color-text-primary-dark: rgba(0, 0, 0, 0.87);
@@ -126,7 +127,7 @@
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background-color: var(--surface-0);
+  background-color: var(--surface-1);
   color: var(--color-text-primary);
 }
 

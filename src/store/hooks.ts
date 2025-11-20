@@ -12,6 +12,7 @@ export function useSelection() {
   const selectedStep = useAppStore((state) => state.selectedStep);
   const selectedPhase = useAppStore((state) => state.selectedPhase);
   const selectedJourney = useAppStore((state) => state.selectedJourney);
+  const selectedProject = useAppStore((state) => state.selectedProject);
   const selectedAttribute = useAppStore((state) => state.selectedAttribute);
   const selectedFirstAttributeType = useAppStore(
     (state) => state.selectedFirstAttributeType
@@ -26,6 +27,7 @@ export function useSelection() {
     selectedStep,
     selectedPhase,
     selectedJourney,
+    selectedProject,
     selectedAttribute,
     selectedFirstAttributeType,
     selectedCard,

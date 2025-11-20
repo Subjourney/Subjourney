@@ -3,15 +3,13 @@
  * Main React Flow canvas for rendering journeys with Dagre layout
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, memo } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
   Background,
   Controls,
-  MiniMap,
   useReactFlow,
-  useNodesInitialized,
   type Node,
   type Edge,
 } from '@xyflow/react';
@@ -23,7 +21,7 @@ import { useSelection } from '../../store';
 import { journeysApi } from '../../api';
 
 const nodeTypes = {
-  'journey-node': JourneyNode,
+  'journey-node': memo(JourneyNode),
 };
 
 const proOptions = { hideAttribution: true };
@@ -31,19 +29,30 @@ const proOptions = { hideAttribution: true };
 /**
  * Inner canvas component that uses React Flow hooks
  */
-function JourneyCanvasInner({ journeyId }: { journeyId: string }) {
+function JourneyCanvasInner({ 
+  journeyId, 
+  backgroundDotColor 
+}: { 
+  journeyId: string;
+  backgroundDotColor?: string;
+}) {
   const { currentJourney, setCurrentJourney } = useAppStore();
   const { clearSelection } = useSelection();
   const { fitView } = useReactFlow();
-  const nodesInitialized = useNodesInitialized();
-  const fitViewCalledRef = useRef(false);
+
+  // Get default background dot color from CSS variable
+  const defaultDotColor = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const root = document.documentElement;
+      const computedColor = getComputedStyle(root).getPropertyValue('--canvas-dot-color').trim();
+      return computedColor || 'rgba(255, 255, 255, 0.15)';
+    }
+    return 'rgba(255, 255, 255, 0.15)';
+  }, []);
 
   // Load journey on mount
   useEffect(() => {
     if (journeyId) {
-      // Reset fitView flag when journey changes
-      fitViewCalledRef.current = false;
-      
       journeysApi
         .getJourney(journeyId, true)
         .then((journey) => {
@@ -60,7 +69,6 @@ function JourneyCanvasInner({ journeyId }: { journeyId: string }) {
     // Cleanup: Clear journey when component unmounts
     return () => {
       setCurrentJourney(null);
-      fitViewCalledRef.current = false;
     };
   }, [journeyId, setCurrentJourney]);
 
@@ -114,20 +122,14 @@ function JourneyCanvasInner({ journeyId }: { journeyId: string }) {
     return layouted;
   }, [currentJourney]);
 
-  // Fit view when nodes are initialized and measured
-  // Wait for nodes to be initialized, then give ResizeObserver time to measure
+  // Fit view when nodes change
   useEffect(() => {
-    if (nodes.length > 0 && nodesInitialized && !fitViewCalledRef.current) {
-      // Give ResizeObserver time to measure node sizes (initial delay + measurement)
-      // useJourneySizeMeasurement has 50ms initial delay, plus ResizeObserver needs time
-      const timer = setTimeout(() => {
+    if (nodes.length > 0) {
+      setTimeout(() => {
         fitView({ padding: 0.2 });
-        fitViewCalledRef.current = true;
-      }, 200); // Increased delay to ensure measurements are complete
-
-      return () => clearTimeout(timer);
+      }, 100);
     }
-  }, [nodes.length, nodesInitialized, fitView]);
+  }, [nodes.length, fitView]);
 
 
   const onNodesChange = useCallback((changes: unknown[]) => {
@@ -166,8 +168,13 @@ function JourneyCanvasInner({ journeyId }: { journeyId: string }) {
       attributionPosition="bottom-left"
       elevateEdgesOnSelect={true}
       elevateNodesOnSelect={false}
+      minZoom={0.1}
+      maxZoom={1}
+      panOnScroll={true}
+      selectionOnDrag={true}
+      panOnDrag={false}
     >
-      <Background />
+      <Background color={backgroundDotColor || defaultDotColor} />
       <Controls />
     </ReactFlow>
   );
@@ -176,11 +183,17 @@ function JourneyCanvasInner({ journeyId }: { journeyId: string }) {
 /**
  * Journey Canvas - Main canvas component with React Flow provider
  */
-export function JourneyCanvas({ journeyId }: { journeyId: string }) {
+export function JourneyCanvas({ 
+  journeyId, 
+  backgroundDotColor 
+}: { 
+  journeyId: string;
+  backgroundDotColor?: string;
+}) {
   return (
     <ReactFlowProvider>
       <div style={{ width: '100%', height: '100vh' }}>
-        <JourneyCanvasInner journeyId={journeyId} />
+        <JourneyCanvasInner journeyId={journeyId} backgroundDotColor={backgroundDotColor} />
       </div>
     </ReactFlowProvider>
   );
