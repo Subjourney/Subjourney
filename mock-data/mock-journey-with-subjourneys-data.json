@@ -1,0 +1,533 @@
+{
+  "project_name": "E-Commerce Platform",
+  "team_id": "team-123-456-789",
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-20T14:45:00Z",
+  "available_attributes": [
+    {
+      "id": "attr-001",
+      "name": "Customer",
+      "type": "actor",
+      "description": "The end user shopping on the platform"
+    },
+    {
+      "id": "attr-002",
+      "name": "Product",
+      "type": "thing",
+      "description": "Items available for purchase"
+    },
+    {
+      "id": "attr-003",
+      "name": "Shopping Cart",
+      "type": "thing",
+      "description": "Digital shopping cart"
+    },
+    {
+      "id": "attr-004",
+      "name": "Payment Gateway",
+      "type": "system",
+      "description": "Payment processing system"
+    },
+    {
+      "id": "attr-005",
+      "name": "Order",
+      "type": "action",
+      "description": "The act of placing an order"
+    },
+    {
+      "id": "attr-006",
+      "name": "Delivery Service",
+      "type": "actor",
+      "description": "Shipping and delivery provider"
+    },
+    {
+      "id": "attr-007",
+      "name": "Website",
+      "type": "system",
+      "description": "E-commerce website"
+    },
+    {
+      "id": "attr-008",
+      "name": "Mobile App",
+      "type": "system",
+      "description": "Mobile application"
+    }
+  ],
+  "journeys": [
+    {
+      "id": "journey-001",
+      "name": "Online Shopping Journey",
+      "description": "Complete journey from browsing products to receiving delivery",
+      "summary": "Customer journey for online shopping experience",
+      "is_subjourney": false,
+      "phases": [
+        {
+          "id": "phase-j1-001",
+          "name": "Browse & Discover",
+          "color": "#3B82F6",
+          "sequence_order": 1,
+          "steps": [
+            {
+              "id": "step-j1-001",
+              "name": "Visit Website",
+              "description": "I open the e-commerce website",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-007",
+                  "attribute_name": "Website",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                }
+              ]
+            },
+            {
+              "id": "step-j1-002",
+              "name": "Search Products",
+              "description": "I search for products I want to buy",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-002",
+                  "attribute_name": "Product",
+                  "attribute_type": "thing",
+                  "sequence_order": 2,
+                  "relationship_type": "object"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "phase-j1-002",
+          "name": "Purchase",
+          "color": "#10B981",
+          "sequence_order": 2,
+          "steps": [
+            {
+              "id": "step-j1-003",
+              "name": "Add to Cart",
+              "description": "I add selected products to my shopping cart",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-003",
+                  "attribute_name": "Shopping Cart",
+                  "attribute_type": "thing",
+                  "sequence_order": 2,
+                  "relationship_type": "object"
+                }
+              ],
+              "has_subjourney": true,
+              "subjourney": {
+                "name": "Checkout Process",
+                "description": "Detailed checkout and payment subjourney",
+                "summary": "Subjourney covering the complete checkout experience",
+                "phases": [
+                  {
+                    "id": "phase-subj1-001",
+                    "name": "Review Order",
+                    "color": "#8B5CF6",
+                    "sequence_order": 1,
+                    "steps": [
+                      {
+                        "id": "step-subj1-001",
+                        "name": "Review Cart Contents",
+                        "description": "I review all items in my cart",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-003",
+                            "attribute_name": "Shopping Cart",
+                            "attribute_type": "thing",
+                            "sequence_order": 2,
+                            "relationship_type": "object"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "step-subj1-002",
+                        "name": "Enter Shipping Address",
+                        "description": "I provide my delivery address",
+                        "sequence_order": 2,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "phase-subj1-002",
+                    "name": "Payment",
+                    "color": "#F59E0B",
+                    "sequence_order": 2,
+                    "steps": [
+                      {
+                        "id": "step-subj1-003",
+                        "name": "Enter Payment Details",
+                        "description": "I enter my credit card information",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-004",
+                            "attribute_name": "Payment Gateway",
+                            "attribute_type": "system",
+                            "sequence_order": 2,
+                            "relationship_type": "system"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "step-subj1-004",
+                        "name": "Confirm Payment",
+                        "description": "I confirm and complete the payment",
+                        "sequence_order": 2,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-005",
+                            "attribute_name": "Order",
+                            "attribute_type": "action",
+                            "sequence_order": 2,
+                            "relationship_type": "action"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "step-j1-004",
+              "name": "Complete Purchase",
+              "description": "I finalize my purchase",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-005",
+                  "attribute_name": "Order",
+                  "attribute_type": "action",
+                  "sequence_order": 2,
+                  "relationship_type": "action"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "phase-j1-003",
+          "name": "Delivery",
+          "color": "#EF4444",
+          "sequence_order": 3,
+          "steps": [
+            {
+              "id": "step-j1-005",
+              "name": "Receive Order Confirmation",
+              "description": "I receive email confirmation of my order",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-005",
+                  "attribute_name": "Order",
+                  "attribute_type": "action",
+                  "sequence_order": 2,
+                  "relationship_type": "object"
+                }
+              ]
+            },
+            {
+              "id": "step-j1-006",
+              "name": "Receive Delivery",
+              "description": "I receive my order at my doorstep",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-006",
+                  "attribute_name": "Delivery Service",
+                  "attribute_type": "actor",
+                  "sequence_order": 2,
+                  "relationship_type": "secondary"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journey-002",
+      "name": "Mobile App Shopping Journey",
+      "description": "Shopping experience through the mobile application",
+      "summary": "Customer journey for mobile app shopping",
+      "is_subjourney": false,
+      "phases": [
+        {
+          "id": "phase-j2-001",
+          "name": "App Discovery",
+          "color": "#06B6D4",
+          "sequence_order": 1,
+          "steps": [
+            {
+              "id": "step-j2-001",
+              "name": "Download App",
+              "description": "I download the mobile app from the app store",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-008",
+                  "attribute_name": "Mobile App",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                }
+              ]
+            },
+            {
+              "id": "step-j2-002",
+              "name": "Create Account",
+              "description": "I create an account in the mobile app",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-008",
+                  "attribute_name": "Mobile App",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                }
+              ],
+              "has_subjourney": true,
+              "subjourney": {
+                "name": "Account Setup Process",
+                "description": "Detailed account creation and verification subjourney",
+                "summary": "Subjourney covering account setup and verification",
+                "phases": [
+                  {
+                    "id": "phase-subj2-001",
+                    "name": "Registration",
+                    "color": "#EC4899",
+                    "sequence_order": 1,
+                    "steps": [
+                      {
+                        "id": "step-subj2-001",
+                        "name": "Enter Personal Information",
+                        "description": "I enter my name, email, and password",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "step-subj2-002",
+                        "name": "Accept Terms",
+                        "description": "I read and accept the terms and conditions",
+                        "sequence_order": 2,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "phase-subj2-002",
+                    "name": "Verification",
+                    "color": "#14B8A6",
+                    "sequence_order": 2,
+                    "steps": [
+                      {
+                        "id": "step-subj2-003",
+                        "name": "Verify Email",
+                        "description": "I verify my email address via link",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "step-subj2-004",
+                        "name": "Complete Profile",
+                        "description": "I complete my user profile with preferences",
+                        "sequence_order": 2,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-001",
+                            "attribute_name": "Customer",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "phase-j2-002",
+          "name": "Shopping",
+          "color": "#84CC16",
+          "sequence_order": 2,
+          "steps": [
+            {
+              "id": "step-j2-003",
+              "name": "Browse Products",
+              "description": "I browse products in the mobile app",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-002",
+                  "attribute_name": "Product",
+                  "attribute_type": "thing",
+                  "sequence_order": 2,
+                  "relationship_type": "object"
+                },
+                {
+                  "attribute_definition_id": "attr-008",
+                  "attribute_name": "Mobile App",
+                  "attribute_type": "system",
+                  "sequence_order": 3,
+                  "relationship_type": "system"
+                }
+              ]
+            },
+            {
+              "id": "step-j2-004",
+              "name": "Make Purchase",
+              "description": "I complete a purchase through the app",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-001",
+                  "attribute_name": "Customer",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-005",
+                  "attribute_name": "Order",
+                  "attribute_type": "action",
+                  "sequence_order": 2,
+                  "relationship_type": "action"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

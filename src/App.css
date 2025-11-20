@@ -1,0 +1,184 @@
+/**
+ * App.css
+ * Global styles and CSS variables for Subjourney
+ */
+
+/* ============================================
+   React Flow Edge Z-Index
+   ============================================ */
+
+/* Ensure edges render above nodes */
+.react-flow__edges {
+  z-index: 1000 !important;
+}
+
+.react-flow__edge {
+  z-index: 1000 !important;
+}
+
+.react-flow__edge-path {
+  z-index: 1000 !important;
+}
+
+/* Ensure nodes are below edges */
+.react-flow__nodes {
+  z-index: 100 !important;
+}
+
+.react-flow__node {
+  z-index: 100 !important;
+}
+
+/* ============================================
+   CSS Variables
+   ============================================ */
+
+:root {
+  /* Surface Colors - Dark Theme */
+  --surface-0: #000000;
+  --surface-1: #141414;
+  --surface-2: #1a1a1a;
+  --surface-3: #202020;
+  --surface-4: #2a2a2a;
+  --surface-5: #333333;
+
+  /* Semantic Colors */
+  --color-primary: #2196f3;
+  --color-primary-hover: #1976d2;
+  --color-primary-light: #e3f2fd;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-text-primary: rgba(255, 255, 255, 0.87);
+  --color-text-secondary: rgba(255, 255, 255, 0.6);
+  --color-text-tertiary: rgba(255, 255, 255, 0.4);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-hover: rgba(255, 255, 255, 0.2);
+
+  /* Dark Variants */
+  --color-text-primary-dark: rgba(0, 0, 0, 0.87);
+  --color-text-secondary-dark: rgba(0, 0, 0, 0.6);
+  --color-text-tertiary-dark: rgba(0, 0, 0, 0.4);
+  --color-border-dark: rgba(0, 0, 0, 0.1);
+  --color-border-hover-dark: rgba(0, 0, 0, 0.2);
+
+  /* Border Widths */
+  --border-width-sm: 1px;
+  --border-width-md: 2px;
+
+  /* Border Style */
+  --border-style: solid;
+
+  /* Border Shorthand Variables */
+  --border-default: var(--border-width-sm) var(--border-style) var(--color-border);
+  --border-selected: var(--border-width-md) var(--border-style) var(--color-primary);
+  --border-handle: var(--border-width-md) var(--border-style) var(--surface-0);
+  --border-divider: var(--border-width-sm) var(--border-style) var(--color-border);
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --shadow-selected: 0 0 0 2px var(--color-primary);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 400ms ease;
+
+  /* Typography - Font Sizes */
+  --font-size-xs: 10px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+
+  /* Typography - Font Weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
+
+/* ============================================
+   Root & Layout
+   ============================================ */
+
+#root {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--surface-0);
+  color: var(--color-text-primary);
+}
+
+/* ============================================
+   Typography
+   ============================================ */
+
+.read-the-docs {
+  color: var(--color-text-secondary);
+}
+
+/* ============================================
+   Components
+   ============================================ */
+
+.card {
+  padding: var(--spacing-lg);
+  background-color: var(--surface-1);
+  border-radius: var(--radius-md);
+  border: var(--border-default);
+}
+
+/* ============================================
+   Legacy Styles (Vite Default)
+   ============================================ */
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter var(--transition-base);
+}
+
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}

@@ -1,0 +1,383 @@
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Customer Coffee Order Journey",
+  "description": "A complete customer journey from entering the coffee shop to receiving their order",
+  "summary": "Customer journey mapping the complete coffee ordering experience from entry to receipt",
+  "is_subjourney": false,
+  "team_id": "team-123-456-789",
+  "project_id": "project-abc-def-ghi",
+  "project_name": "Coffee Shop Experience",
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-20T14:45:00Z",
+  "available_attributes": [
+    {
+      "id": "attr-001",
+      "name": "Customer",
+      "type": "actor",
+      "description": "The person ordering coffee"
+    },
+    {
+      "id": "attr-002",
+      "name": "Barista",
+      "type": "actor",
+      "description": "Coffee shop staff member"
+    },
+    {
+      "id": "attr-003",
+      "name": "Order",
+      "type": "action",
+      "description": "The act of placing an order"
+    },
+    {
+      "id": "attr-004",
+      "name": "Payment",
+      "type": "action",
+      "description": "The payment process"
+    },
+    {
+      "id": "attr-005",
+      "name": "Coffee",
+      "type": "thing",
+      "description": "The coffee product"
+    },
+    {
+      "id": "attr-006",
+      "name": "POS System",
+      "type": "system",
+      "description": "Point of sale system"
+    },
+    {
+      "id": "attr-007",
+      "name": "Coffee Shop",
+      "type": "place",
+      "description": "Physical location"
+    },
+    {
+      "id": "attr-008",
+      "name": "Welcome",
+      "type": "word",
+      "description": "Greeting word"
+    }
+  ],
+  "available_flows": [
+    {
+      "id": "flow-001",
+      "name": "Standard Order Flow",
+      "description": "Standard ordering process"
+    }
+  ],
+  "phases": [
+    {
+      "id": "phase-001",
+      "name": "Entry & Discovery",
+      "color": "#3B82F6",
+      "sequence_order": 1,
+      "journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "journey_name": "Customer Coffee Order Journey",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789",
+      "steps": [
+        {
+          "id": "step-001",
+          "name": "Enter Coffee Shop",
+          "description": "I walk into the coffee shop and look around",
+          "sequence_order": 1,
+          "phase_id": "phase-001",
+          "phase_name": "Entry & Discovery",
+          "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+          "is_subjourney": false,
+          "team_id": "team-123-456-789",
+          "attributes": [
+            {
+              "attribute_definition_id": "attr-001",
+              "attribute_name": "Customer",
+              "attribute_type": "actor",
+              "sequence_order": 1,
+              "relationship_type": "primary"
+            },
+            {
+              "attribute_definition_id": "attr-007",
+              "attribute_name": "Coffee Shop",
+              "attribute_type": "place",
+              "sequence_order": 2,
+              "relationship_type": "location"
+            }
+          ]
+        },
+        {
+          "id": "step-002",
+          "name": "Review Menu",
+          "description": "I look at the menu board to see available options",
+          "sequence_order": 2,
+          "phase_id": "phase-001",
+          "phase_name": "Entry & Discovery",
+          "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+          "is_subjourney": false,
+          "team_id": "team-123-456-789",
+          "attributes": [
+            {
+              "attribute_definition_id": "attr-001",
+              "attribute_name": "Customer",
+              "attribute_type": "actor",
+              "sequence_order": 1,
+              "relationship_type": "primary"
+            },
+            {
+              "attribute_definition_id": "attr-005",
+              "attribute_name": "Coffee",
+              "attribute_type": "thing",
+              "sequence_order": 2,
+              "relationship_type": "object"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-002",
+      "name": "Ordering",
+      "color": "#10B981",
+      "sequence_order": 2,
+      "journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "journey_name": "Customer Coffee Order Journey",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789",
+      "steps": [
+        {
+          "id": "step-003",
+          "name": "Place Order",
+          "description": "I tell the barista what I want to order",
+          "sequence_order": 1,
+          "phase_id": "phase-002",
+          "phase_name": "Ordering",
+          "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+          "is_subjourney": false,
+          "team_id": "team-123-456-789",
+          "attributes": [
+            {
+              "attribute_definition_id": "attr-001",
+              "attribute_name": "Customer",
+              "attribute_type": "actor",
+              "sequence_order": 1,
+              "relationship_type": "primary"
+            },
+            {
+              "attribute_definition_id": "attr-002",
+              "attribute_name": "Barista",
+              "attribute_type": "actor",
+              "sequence_order": 2,
+              "relationship_type": "secondary"
+            },
+            {
+              "attribute_definition_id": "attr-003",
+              "attribute_name": "Order",
+              "attribute_type": "action",
+              "sequence_order": 3,
+              "relationship_type": "action"
+            },
+            {
+              "attribute_definition_id": "attr-008",
+              "attribute_name": "Welcome",
+              "attribute_type": "word",
+              "sequence_order": 4,
+              "relationship_type": "context"
+            }
+          ]
+        },
+        {
+          "id": "step-004",
+          "name": "Make Payment",
+          "description": "I pay for my order using the POS system",
+          "sequence_order": 2,
+          "phase_id": "phase-002",
+          "phase_name": "Ordering",
+          "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+          "is_subjourney": false,
+          "team_id": "team-123-456-789",
+          "attributes": [
+            {
+              "attribute_definition_id": "attr-001",
+              "attribute_name": "Customer",
+              "attribute_type": "actor",
+              "sequence_order": 1,
+              "relationship_type": "primary"
+            },
+            {
+              "attribute_definition_id": "attr-004",
+              "attribute_name": "Payment",
+              "attribute_type": "action",
+              "sequence_order": 2,
+              "relationship_type": "action"
+            },
+            {
+              "attribute_definition_id": "attr-006",
+              "attribute_name": "POS System",
+              "attribute_type": "system",
+              "sequence_order": 3,
+              "relationship_type": "system"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-003",
+      "name": "Preparation & Receipt",
+      "color": "#F59E0B",
+      "sequence_order": 3,
+      "journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "journey_name": "Customer Coffee Order Journey",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789",
+      "steps": [
+        {
+          "id": "step-005",
+          "name": "Wait for Coffee",
+          "description": "I wait while the barista prepares my coffee",
+          "sequence_order": 1,
+          "phase_id": "phase-003",
+          "phase_name": "Preparation & Receipt",
+          "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+          "is_subjourney": false,
+          "team_id": "team-123-456-789",
+          "attributes": [
+            {
+              "attribute_definition_id": "attr-001",
+              "attribute_name": "Customer",
+              "attribute_type": "actor",
+              "sequence_order": 1,
+              "relationship_type": "primary"
+            },
+            {
+              "attribute_definition_id": "attr-002",
+              "attribute_name": "Barista",
+              "attribute_type": "actor",
+              "sequence_order": 2,
+              "relationship_type": "secondary"
+            },
+            {
+              "attribute_definition_id": "attr-005",
+              "attribute_name": "Coffee",
+              "attribute_type": "thing",
+              "sequence_order": 3,
+              "relationship_type": "object"
+            }
+          ]
+        },
+        {
+          "id": "step-006",
+          "name": "Receive Order",
+          "description": "The barista hands me my coffee and I leave",
+          "sequence_order": 2,
+          "phase_id": "phase-003",
+          "phase_name": "Preparation & Receipt",
+          "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+          "is_subjourney": false,
+          "team_id": "team-123-456-789",
+          "attributes": [
+            {
+              "attribute_definition_id": "attr-001",
+              "attribute_name": "Customer",
+              "attribute_type": "actor",
+              "sequence_order": 1,
+              "relationship_type": "primary"
+            },
+            {
+              "attribute_definition_id": "attr-002",
+              "attribute_name": "Barista",
+              "attribute_type": "actor",
+              "sequence_order": 2,
+              "relationship_type": "secondary"
+            },
+            {
+              "attribute_definition_id": "attr-005",
+              "attribute_name": "Coffee",
+              "attribute_type": "thing",
+              "sequence_order": 3,
+              "relationship_type": "object"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "id": "step-001",
+      "name": "Enter Coffee Shop",
+      "description": "I walk into the coffee shop and look around",
+      "sequence_order": 1,
+      "phase_id": "phase-001",
+      "phase_name": "Entry & Discovery",
+      "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789"
+    },
+    {
+      "id": "step-002",
+      "name": "Review Menu",
+      "description": "I look at the menu board to see available options",
+      "sequence_order": 2,
+      "phase_id": "phase-001",
+      "phase_name": "Entry & Discovery",
+      "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789"
+    },
+    {
+      "id": "step-003",
+      "name": "Place Order",
+      "description": "I tell the barista what I want to order",
+      "sequence_order": 1,
+      "phase_id": "phase-002",
+      "phase_name": "Ordering",
+      "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789"
+    },
+    {
+      "id": "step-004",
+      "name": "Make Payment",
+      "description": "I pay for my order using the POS system",
+      "sequence_order": 2,
+      "phase_id": "phase-002",
+      "phase_name": "Ordering",
+      "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789"
+    },
+    {
+      "id": "step-005",
+      "name": "Wait for Coffee",
+      "description": "I wait while the barista prepares my coffee",
+      "sequence_order": 1,
+      "phase_id": "phase-003",
+      "phase_name": "Preparation & Receipt",
+      "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789"
+    },
+    {
+      "id": "step-006",
+      "name": "Receive Order",
+      "description": "The barista hands me my coffee and I leave",
+      "sequence_order": 2,
+      "phase_id": "phase-003",
+      "phase_name": "Preparation & Receipt",
+      "parent_journey_id": "550e8400-e29b-41d4-a716-446655440000",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789"
+    }
+  ],
+  "subjourneys": [],
+  "journeys": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "Customer Coffee Order Journey",
+      "description": "A complete customer journey from entering the coffee shop to receiving their order",
+      "is_subjourney": false,
+      "team_id": "team-123-456-789"
+    }
+  ]
+}
+
