@@ -50,6 +50,13 @@ export async function deleteAttribute(attributeId: string): Promise<void> {
 }
 
 /**
+ * Get single attribute by id
+ */
+export async function getAttribute(attributeId: string): Promise<Attribute> {
+  return apiClient.get<Attribute>(`/api/attributes/${attributeId}`);
+}
+
+/**
  * Get attributes for a step
  */
 export async function getStepAttributes(stepId: string): Promise<StepAttribute[]> {

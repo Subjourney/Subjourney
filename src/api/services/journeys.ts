@@ -78,21 +78,11 @@ export async function deletePhase(phaseId: string): Promise<void> {
 export async function createStep(
   phaseId: string,
   data: Partial<Step>
-): Promise<Journey> {
-  const step = await apiClient.post<Step>('/api/steps/', {
+): Promise<Step> {
+  return apiClient.post<Step>('/api/steps/create', {
     phase_id: phaseId,
     ...data,
   });
-
-  // Fetch the parent journey structure to return complete data
-  try {
-    const phase = await apiClient.get<Phase>(`/api/phases/${phaseId}`);
-    const journeyId = phase.journey_id;
-    return getJourney(journeyId, true);
-  } catch (error) {
-    // If we can't fetch the journey, return the step as-is
-    throw error;
-  }
 }
 
 /**

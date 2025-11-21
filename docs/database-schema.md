@@ -31,12 +31,13 @@ Each level maintains a reference to its parent and includes `team_id` for effici
 
 ### Journeys
 - **Purpose**: Main journey maps (can be subjourneys)
-- **Key Fields**: `id`, `team_id`, `project_id`, `name`, `is_subjourney`, `parent_step_id`
+- **Key Fields**: `id`, `team_id`, `project_id`, `name`, `is_subjourney`, `parent_step_id`, `continue_step_id`
 - **Relationships**: 
   - `team_id → teams(id)`
   - `project_id → projects(id)`
   - `parent_step_id → steps(id)` (for subjourneys)
 - **Subjourney Pattern**: When `is_subjourney = true`, `parent_step_id` references the step that contains this subjourney
+- **Continuation Pattern**: `continue_step_id` (optional) can explicitly define which step to continue to when the journey finishes. When `continue_step_id` is null, the UI derives a default continuation based on the next sequential step after the parent step, or in nested subjourney edge cases, the parent step of the parent subjourney.
 
 ### Phases
 - **Purpose**: Horizontal grouping within a journey

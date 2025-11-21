@@ -1,88 +1,160 @@
 {
-  "project_name": "E-Commerce Platform",
-  "team_id": "team-123-456-789",
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-20T14:45:00Z",
+  "project_name": "Digital Health Platform",
+  "team_id": "team-care-001",
+  "created_at": "2024-03-10T09:00:00Z",
+  "updated_at": "2024-03-12T16:30:00Z",
   "available_attributes": [
     {
-      "id": "attr-001",
-      "name": "Customer",
+      "id": "attr-101",
+      "name": "Patient",
       "type": "actor",
-      "description": "The end user shopping on the platform"
+      "description": "The person receiving care via the platform"
     },
     {
-      "id": "attr-002",
-      "name": "Product",
-      "type": "thing",
-      "description": "Items available for purchase"
+      "id": "attr-102",
+      "name": "Clinician",
+      "type": "actor",
+      "description": "Doctor, specialist, or nurse providing care"
     },
     {
-      "id": "attr-003",
-      "name": "Shopping Cart",
-      "type": "thing",
-      "description": "Digital shopping cart"
+      "id": "attr-103",
+      "name": "Care Coordinator",
+      "type": "actor",
+      "description": "Team member coordinating appointments and follow-ups"
     },
     {
-      "id": "attr-004",
-      "name": "Payment Gateway",
+      "id": "attr-104",
+      "name": "Telehealth App",
       "type": "system",
-      "description": "Payment processing system"
+      "description": "Mobile or desktop application used for virtual care"
     },
     {
-      "id": "attr-005",
-      "name": "Order",
+      "id": "attr-105",
+      "name": "Patient Portal",
+      "type": "system",
+      "description": "Web portal where patients manage their profile and records"
+    },
+    {
+      "id": "attr-106",
+      "name": "EHR System",
+      "type": "system",
+      "description": "Electronic Health Record system storing clinical data"
+    },
+    {
+      "id": "attr-107",
+      "name": "Insurance Provider",
+      "type": "actor",
+      "description": "Third-party payer responsible for coverage and claims"
+    },
+    {
+      "id": "attr-108",
+      "name": "Insurance Policy",
+      "type": "thing",
+      "description": "Policy details including coverage, deductibles, and copays"
+    },
+    {
+      "id": "attr-109",
+      "name": "Appointment",
+      "type": "thing",
+      "description": "A scheduled consultation between patient and clinician"
+    },
+    {
+      "id": "attr-110",
+      "name": "Notification Service",
+      "type": "system",
+      "description": "Service responsible for sending reminders and alerts"
+    },
+    {
+      "id": "attr-111",
+      "name": "Pharmacy",
+      "type": "actor",
+      "description": "Pharmacy fulfilling prescriptions"
+    },
+    {
+      "id": "attr-112",
+      "name": "Prescription",
+      "type": "thing",
+      "description": "Medication prescribed during or after consultation"
+    },
+    {
+      "id": "attr-113",
+      "name": "Diagnostic Lab",
+      "type": "actor",
+      "description": "Laboratory performing tests ordered by the clinician"
+    },
+    {
+      "id": "attr-114",
+      "name": "Test Order",
+      "type": "thing",
+      "description": "Order for diagnostic tests such as blood work or imaging"
+    },
+    {
+      "id": "attr-115",
+      "name": "Video Call",
+      "type": "channel",
+      "description": "Live video communication channel for virtual visits"
+    },
+    {
+      "id": "attr-116",
+      "name": "Email",
+      "type": "channel",
+      "description": "Email channel used for confirmations and summaries"
+    },
+    {
+      "id": "attr-117",
+      "name": "Push Notification",
+      "type": "channel",
+      "description": "Mobile or desktop push alerts"
+    },
+    {
+      "id": "attr-118",
+      "name": "Clinic Location",
+      "type": "place",
+      "description": "Physical clinic used for in-person visits when required"
+    },
+    {
+      "id": "attr-119",
+      "name": "Payment Transaction",
       "type": "action",
-      "description": "The act of placing an order"
+      "description": "The act of paying for a consultation or service"
     },
     {
-      "id": "attr-006",
-      "name": "Delivery Service",
-      "type": "actor",
-      "description": "Shipping and delivery provider"
-    },
-    {
-      "id": "attr-007",
-      "name": "Website",
-      "type": "system",
-      "description": "E-commerce website"
-    },
-    {
-      "id": "attr-008",
-      "name": "Mobile App",
-      "type": "system",
-      "description": "Mobile application"
+      "id": "attr-120",
+      "name": "Care Plan",
+      "type": "thing",
+      "description": "Structured plan outlining ongoing treatment and follow-up"
     }
   ],
   "journeys": [
     {
-      "id": "journey-001",
-      "name": "Product Discovery & Research Journey",
-      "description": "Customer journey from initial product discovery through research and cart building",
-      "summary": "First phase of shopping experience focusing on discovery and consideration",
+      "id": "journey-101",
+      "name": "Registration & Account Setup Journey",
+      "description": "Journey from first arrival on the platform to a fully verified and configured patient account.",
+      "summary": "Phase 1 of the patient lifecycle: onboarding, verification, and profile configuration.",
       "is_subjourney": false,
       "phases": [
         {
-          "id": "phase-j1-001",
-          "name": "Initial Discovery",
+          "id": "phase-j101-001",
+          "name": "Initial Arrival & Interest",
           "color": "#3B82F6",
           "sequence_order": 1,
           "steps": [
             {
-              "id": "step-j1-001",
-              "name": "Visit Website",
-              "description": "I open the e-commerce website",
+              "id": "step-j101-001",
+              "name": "Visit Landing Page",
+              "description": "I arrive on the digital health platform landing page from a search ad.",
               "sequence_order": 1,
               "attributes": [
                 {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
                   "attribute_type": "actor",
                   "sequence_order": 1,
                   "relationship_type": "primary"
                 },
                 {
-                  "attribute_definition_id": "attr-007",
-                  "attribute_name": "Website",
+                  "attribute_definition_id": "attr-104",
+                  "attribute_name": "Telehealth App",
                   "attribute_type": "system",
                   "sequence_order": 2,
                   "relationship_type": "system"
@@ -90,357 +162,191 @@
               ]
             },
             {
-              "id": "step-j1-002",
-              "name": "Search Products",
-              "description": "I search for products I want to buy",
+              "id": "step-j101-002",
+              "name": "Explore Benefits",
+              "description": "I browse information about virtual care, pricing, and clinician types.",
               "sequence_order": 2,
               "attributes": [
                 {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
                   "attribute_type": "actor",
                   "sequence_order": 1,
                   "relationship_type": "primary"
                 },
                 {
-                  "attribute_definition_id": "attr-002",
-                  "attribute_name": "Product",
-                  "attribute_type": "thing",
+                  "attribute_definition_id": "attr-105",
+                  "attribute_name": "Patient Portal",
+                  "attribute_type": "system",
                   "sequence_order": 2,
-                  "relationship_type": "object"
+                  "relationship_type": "system"
                 }
               ]
             }
           ]
         },
         {
-          "id": "phase-j1-002",
-          "name": "Product Research",
+          "id": "phase-j101-002",
+          "name": "Account Creation",
           "color": "#10B981",
           "sequence_order": 2,
           "steps": [
             {
-              "id": "step-j1-003",
-              "name": "Compare Products",
-              "description": "I compare different products and their features",
+              "id": "step-j101-003",
+              "name": "Create Account",
+              "description": "I start the sign-up flow to create my patient account.",
               "sequence_order": 1,
               "attributes": [
                 {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
                   "attribute_type": "actor",
                   "sequence_order": 1,
                   "relationship_type": "primary"
                 },
                 {
-                  "attribute_definition_id": "attr-002",
-                  "attribute_name": "Product",
-                  "attribute_type": "thing",
+                  "attribute_definition_id": "attr-105",
+                  "attribute_name": "Patient Portal",
+                  "attribute_type": "system",
                   "sequence_order": 2,
-                  "relationship_type": "object"
+                  "relationship_type": "system"
                 }
               ],
               "has_subjourney": true,
               "subjourney": {
-                "name": "Product Evaluation Process",
-                "description": "Detailed product comparison and evaluation subjourney",
-                "summary": "Subjourney covering product research and comparison",
+                "name": "Account Creation Flow",
+                "description": "Detailed journey through account creation steps.",
+                "summary": "Subjourney covering personal details, credentials, and email verification.",
                 "phases": [
                   {
-                    "id": "phase-subj1-001",
-                    "name": "Review Details",
+                    "id": "phase-subj101-001",
+                    "name": "Capture Personal Details",
                     "color": "#8B5CF6",
                     "sequence_order": 1,
                     "steps": [
                       {
-                        "id": "step-subj1-001",
-                        "name": "Read Product Specifications",
-                        "description": "I review detailed product specifications and features",
+                        "id": "step-subj101-001",
+                        "name": "Enter Basic Information",
+                        "description": "I enter my name, date of birth, and contact details.",
                         "sequence_order": 1,
                         "attributes": [
                           {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
                             "attribute_type": "actor",
                             "sequence_order": 1,
                             "relationship_type": "primary"
                           },
                           {
-                            "attribute_definition_id": "attr-002",
-                            "attribute_name": "Product",
-                            "attribute_type": "thing",
-                            "sequence_order": 2,
-                            "relationship_type": "object"
-                          }
-                        ]
-                      },
-                      {
-                        "id": "step-subj1-002",
-                        "name": "Check Customer Reviews",
-                        "description": "I read reviews from other customers",
-                        "sequence_order": 2,
-                        "attributes": [
-                          {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
-                            "attribute_type": "actor",
-                            "sequence_order": 1,
-                            "relationship_type": "primary"
-                          },
-                          {
-                            "attribute_definition_id": "attr-002",
-                            "attribute_name": "Product",
-                            "attribute_type": "thing",
-                            "sequence_order": 2,
-                            "relationship_type": "object"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "id": "phase-subj1-002",
-                    "name": "Price Comparison",
-                    "color": "#F59E0B",
-                    "sequence_order": 2,
-                    "steps": [
-                      {
-                        "id": "step-subj1-003",
-                        "name": "Compare Prices",
-                        "description": "I compare prices across different options",
-                        "sequence_order": 1,
-                        "attributes": [
-                          {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
-                            "attribute_type": "actor",
-                            "sequence_order": 1,
-                            "relationship_type": "primary"
-                          },
-                          {
-                            "attribute_definition_id": "attr-002",
-                            "attribute_name": "Product",
-                            "attribute_type": "thing",
-                            "sequence_order": 2,
-                            "relationship_type": "object"
-                          }
-                        ]
-                      },
-                      {
-                        "id": "step-subj1-004",
-                        "name": "Check Availability",
-                        "description": "I verify product availability and shipping options",
-                        "sequence_order": 2,
-                        "attributes": [
-                          {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
-                            "attribute_type": "actor",
-                            "sequence_order": 1,
-                            "relationship_type": "primary"
-                          },
-                          {
-                            "attribute_definition_id": "attr-002",
-                            "attribute_name": "Product",
-                            "attribute_type": "thing",
-                            "sequence_order": 2,
-                            "relationship_type": "object"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            },
-            {
-              "id": "step-j1-004",
-              "name": "Add to Cart",
-              "description": "I add selected products to my shopping cart",
-              "sequence_order": 2,
-              "attributes": [
-                {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
-                  "attribute_type": "actor",
-                  "sequence_order": 1,
-                  "relationship_type": "primary"
-                },
-                {
-                  "attribute_definition_id": "attr-003",
-                  "attribute_name": "Shopping Cart",
-                  "attribute_type": "thing",
-                  "sequence_order": 2,
-                  "relationship_type": "object"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "journey-002",
-      "name": "Purchase & Fulfillment Journey",
-      "description": "Customer journey from completing purchase through order fulfillment and delivery",
-      "summary": "Second phase of shopping experience focusing on purchase completion and delivery",
-      "is_subjourney": false,
-      "phases": [
-        {
-          "id": "phase-j2-001",
-          "name": "Checkout & Payment",
-          "color": "#06B6D4",
-          "sequence_order": 1,
-          "steps": [
-            {
-              "id": "step-j2-001",
-              "name": "Review Cart",
-              "description": "I review my cart before proceeding to checkout",
-              "sequence_order": 1,
-              "attributes": [
-                {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
-                  "attribute_type": "actor",
-                  "sequence_order": 1,
-                  "relationship_type": "primary"
-                },
-                {
-                  "attribute_definition_id": "attr-003",
-                  "attribute_name": "Shopping Cart",
-                  "attribute_type": "thing",
-                  "sequence_order": 2,
-                  "relationship_type": "object"
-                }
-              ],
-              "has_subjourney": true,
-              "subjourney": {
-                "name": "Checkout Process",
-                "description": "Detailed checkout and payment subjourney",
-                "summary": "Subjourney covering the complete checkout experience",
-                "phases": [
-                  {
-                    "id": "phase-subj2-001",
-                    "name": "Order Review",
-                    "color": "#EC4899",
-                    "sequence_order": 1,
-                    "steps": [
-                      {
-                        "id": "step-subj2-001",
-                        "name": "Review Cart Contents",
-                        "description": "I review all items in my cart",
-                        "sequence_order": 1,
-                        "attributes": [
-                          {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
-                            "attribute_type": "actor",
-                            "sequence_order": 1,
-                            "relationship_type": "primary"
-                          },
-                          {
-                            "attribute_definition_id": "attr-003",
-                            "attribute_name": "Shopping Cart",
-                            "attribute_type": "thing",
-                            "sequence_order": 2,
-                            "relationship_type": "object"
-                          }
-                        ]
-                      },
-                      {
-                        "id": "step-subj2-002",
-                        "name": "Enter Shipping Address",
-                        "description": "I provide my delivery address",
-                        "sequence_order": 2,
-                        "attributes": [
-                          {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
-                            "attribute_type": "actor",
-                            "sequence_order": 1,
-                            "relationship_type": "primary"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "id": "phase-subj2-002",
-                    "name": "Payment Processing",
-                    "color": "#14B8A6",
-                    "sequence_order": 2,
-                    "steps": [
-                      {
-                        "id": "step-subj2-003",
-                        "name": "Enter Payment Details",
-                        "description": "I enter my credit card information",
-                        "sequence_order": 1,
-                        "attributes": [
-                          {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
-                            "attribute_type": "actor",
-                            "sequence_order": 1,
-                            "relationship_type": "primary"
-                          },
-                          {
-                            "attribute_definition_id": "attr-004",
-                            "attribute_name": "Payment Gateway",
+                            "attribute_definition_id": "attr-105",
+                            "attribute_name": "Patient Portal",
                             "attribute_type": "system",
                             "sequence_order": 2,
                             "relationship_type": "system"
                           }
+                        ]
+                      },
+                      {
+                        "id": "step-subj101-002",
+                        "name": "Create Login Credentials",
+                        "description": "I choose my username and password and accept terms.",
+                        "sequence_order": 2,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-105",
+                            "attribute_name": "Patient Portal",
+                            "attribute_type": "system",
+                            "sequence_order": 2,
+                            "relationship_type": "system"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "phase-subj101-002",
+                    "name": "Email Verification",
+                    "color": "#F59E0B",
+                    "sequence_order": 2,
+                    "steps": [
+                      {
+                        "id": "step-subj101-003",
+                        "name": "Receive Verification Email",
+                        "description": "I receive an email to verify my account.",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-116",
+                            "attribute_name": "Email",
+                            "attribute_type": "channel",
+                            "sequence_order": 2,
+                            "relationship_type": "channel"
+                          }
                         ],
                         "has_subjourney": true,
                         "subjourney": {
-                          "name": "Payment Method Setup",
-                          "description": "Detailed payment method selection and verification subjourney",
-                          "summary": "Nested subjourney covering payment method setup and security verification",
+                          "name": "Email Verification Edge Cases",
+                          "description": "Handling different scenarios when verifying email.",
+                          "summary": "Nested subjourney with resend, spam check, and link expiry handling.",
                           "phases": [
                             {
-                              "id": "phase-subj2-nested-001",
-                              "name": "Payment Method Selection",
+                              "id": "phase-subj101-nested-001",
+                              "name": "Open Verification Email",
                               "color": "#6366F1",
                               "sequence_order": 1,
                               "steps": [
                                 {
-                                  "id": "step-subj2-nested-001",
-                                  "name": "Choose Payment Type",
-                                  "description": "I select whether to use credit card, debit card, or digital wallet",
+                                  "id": "step-subj101-nested-001",
+                                  "name": "Find Email in Inbox",
+                                  "description": "I locate the verification email in my inbox.",
                                   "sequence_order": 1,
                                   "attributes": [
                                     {
-                                      "attribute_definition_id": "attr-001",
-                                      "attribute_name": "Customer",
+                                      "attribute_definition_id": "attr-101",
+                                      "attribute_name": "Patient",
                                       "attribute_type": "actor",
                                       "sequence_order": 1,
                                       "relationship_type": "primary"
                                     },
                                     {
-                                      "attribute_definition_id": "attr-004",
-                                      "attribute_name": "Payment Gateway",
-                                      "attribute_type": "system",
+                                      "attribute_definition_id": "attr-116",
+                                      "attribute_name": "Email",
+                                      "attribute_type": "channel",
                                       "sequence_order": 2,
-                                      "relationship_type": "system"
+                                      "relationship_type": "channel"
                                     }
                                   ]
                                 },
                                 {
-                                  "id": "step-subj2-nested-002",
-                                  "name": "Enter Card Information",
-                                  "description": "I enter my card number, expiry date, and CVV",
+                                  "id": "step-subj101-nested-002",
+                                  "name": "Resend Verification",
+                                  "description": "I request a new verification email if I cannot find the first one.",
                                   "sequence_order": 2,
                                   "attributes": [
                                     {
-                                      "attribute_definition_id": "attr-001",
-                                      "attribute_name": "Customer",
+                                      "attribute_definition_id": "attr-101",
+                                      "attribute_name": "Patient",
                                       "attribute_type": "actor",
                                       "sequence_order": 1,
                                       "relationship_type": "primary"
                                     },
                                     {
-                                      "attribute_definition_id": "attr-004",
-                                      "attribute_name": "Payment Gateway",
+                                      "attribute_definition_id": "attr-110",
+                                      "attribute_name": "Notification Service",
                                       "attribute_type": "system",
                                       "sequence_order": 2,
                                       "relationship_type": "system"
@@ -450,27 +356,27 @@
                               ]
                             },
                             {
-                              "id": "phase-subj2-nested-002",
-                              "name": "Security Verification",
+                              "id": "phase-subj101-nested-002",
+                              "name": "Confirm Email Ownership",
                               "color": "#EC4899",
                               "sequence_order": 2,
                               "steps": [
                                 {
-                                  "id": "step-subj2-nested-003",
-                                  "name": "Verify Card Details",
-                                  "description": "The system verifies my card details with the bank",
+                                  "id": "step-subj101-nested-003",
+                                  "name": "Click Verification Link",
+                                  "description": "I click the verification link to confirm my email.",
                                   "sequence_order": 1,
                                   "attributes": [
                                     {
-                                      "attribute_definition_id": "attr-001",
-                                      "attribute_name": "Customer",
+                                      "attribute_definition_id": "attr-101",
+                                      "attribute_name": "Patient",
                                       "attribute_type": "actor",
                                       "sequence_order": 1,
                                       "relationship_type": "primary"
                                     },
                                     {
-                                      "attribute_definition_id": "attr-004",
-                                      "attribute_name": "Payment Gateway",
+                                      "attribute_definition_id": "attr-105",
+                                      "attribute_name": "Patient Portal",
                                       "attribute_type": "system",
                                       "sequence_order": 2,
                                       "relationship_type": "system"
@@ -478,21 +384,21 @@
                                   ]
                                 },
                                 {
-                                  "id": "step-subj2-nested-004",
-                                  "name": "Complete Payment Setup",
-                                  "description": "My payment method is successfully set up and ready",
+                                  "id": "step-subj101-nested-004",
+                                  "name": "Handle Expired Link",
+                                  "description": "If the link is expired, I am guided to request a new one.",
                                   "sequence_order": 2,
                                   "attributes": [
                                     {
-                                      "attribute_definition_id": "attr-001",
-                                      "attribute_name": "Customer",
+                                      "attribute_definition_id": "attr-101",
+                                      "attribute_name": "Patient",
                                       "attribute_type": "actor",
                                       "sequence_order": 1,
                                       "relationship_type": "primary"
                                     },
                                     {
-                                      "attribute_definition_id": "attr-004",
-                                      "attribute_name": "Payment Gateway",
+                                      "attribute_definition_id": "attr-110",
+                                      "attribute_name": "Notification Service",
                                       "attribute_type": "system",
                                       "sequence_order": 2,
                                       "relationship_type": "system"
@@ -503,28 +409,313 @@
                             }
                           ]
                         }
-                      },
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "phase-j101-003",
+          "name": "Profile & Insurance Setup",
+          "color": "#06B6D4",
+          "sequence_order": 3,
+          "steps": [
+            {
+              "id": "step-j101-004",
+              "name": "Complete Health Profile",
+              "description": "I enter medical history, allergies, and medications.",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-106",
+                  "attribute_name": "EHR System",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                }
+              ]
+            },
+            {
+              "id": "step-j101-005",
+              "name": "Add Insurance Details",
+              "description": "I add my insurance provider and policy details to my account.",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-107",
+                  "attribute_name": "Insurance Provider",
+                  "attribute_type": "actor",
+                  "sequence_order": 2,
+                  "relationship_type": "secondary"
+                },
+                {
+                  "attribute_definition_id": "attr-108",
+                  "attribute_name": "Insurance Policy",
+                  "attribute_type": "thing",
+                  "sequence_order": 3,
+                  "relationship_type": "object"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journey-102",
+      "name": "Appointment Booking & Preparation Journey",
+      "description": "Journey from searching for a suitable clinician to being fully prepared for the appointment.",
+      "summary": "Phase 2 of the patient lifecycle: finding the right clinician, booking, and preparing for the visit.",
+      "is_subjourney": false,
+      "phases": [
+        {
+          "id": "phase-j102-001",
+          "name": "Find a Clinician",
+          "color": "#F97316",
+          "sequence_order": 1,
+          "steps": [
+            {
+              "id": "step-j102-001",
+              "name": "Search for Clinicians",
+              "description": "I search by specialty, availability, and language preferences.",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-105",
+                  "attribute_name": "Patient Portal",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                }
+              ],
+              "has_subjourney": true,
+              "subjourney": {
+                "name": "Provider Search & Matching",
+                "description": "Detailed subjourney for finding a clinician that meets clinical and personal preferences.",
+                "summary": "Subjourney for filters, recommendations, and insurance compatibility.",
+                "phases": [
+                  {
+                    "id": "phase-subj102-001",
+                    "name": "Preference Capture",
+                    "color": "#0EA5E9",
+                    "sequence_order": 1,
+                    "steps": [
                       {
-                        "id": "step-subj2-004",
-                        "name": "Confirm Payment",
-                        "description": "I confirm and complete the payment",
-                        "sequence_order": 2,
+                        "id": "step-subj102-001",
+                        "name": "Set Search Filters",
+                        "description": "I set filters such as specialty, gender preference, and language.",
+                        "sequence_order": 1,
                         "attributes": [
                           {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
                             "attribute_type": "actor",
                             "sequence_order": 1,
                             "relationship_type": "primary"
                           },
                           {
-                            "attribute_definition_id": "attr-005",
-                            "attribute_name": "Order",
-                            "attribute_type": "action",
+                            "attribute_definition_id": "attr-105",
+                            "attribute_name": "Patient Portal",
+                            "attribute_type": "system",
                             "sequence_order": 2,
-                            "relationship_type": "action"
+                            "relationship_type": "system"
                           }
                         ]
+                      },
+                      {
+                        "id": "step-subj102-002",
+                        "name": "View Recommended Clinicians",
+                        "description": "I browse recommended clinicians based on my preferences.",
+                        "sequence_order": 2,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-102",
+                            "attribute_name": "Clinician",
+                            "attribute_type": "actor",
+                            "sequence_order": 2,
+                            "relationship_type": "secondary"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "phase-subj102-002",
+                    "name": "Insurance & Eligibility Check",
+                    "color": "#22C55E",
+                    "sequence_order": 2,
+                    "steps": [
+                      {
+                        "id": "step-subj102-003",
+                        "name": "Check Insurance Coverage",
+                        "description": "I see whether each clinician is covered under my insurance.",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-107",
+                            "attribute_name": "Insurance Provider",
+                            "attribute_type": "actor",
+                            "sequence_order": 2,
+                            "relationship_type": "secondary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-108",
+                            "attribute_name": "Insurance Policy",
+                            "attribute_type": "thing",
+                            "sequence_order": 3,
+                            "relationship_type": "object"
+                          }
+                        ],
+                        "has_subjourney": true,
+                        "subjourney": {
+                          "name": "Eligibility Verification Process",
+                          "description": "Nested subjourney verifying coverage, copay, and preauthorization requirements.",
+                          "summary": "Nested subjourney for real-time insurance eligibility checks.",
+                          "phases": [
+                            {
+                              "id": "phase-subj102-nested-001",
+                              "name": "Real-Time Eligibility",
+                              "color": "#4F46E5",
+                              "sequence_order": 1,
+                              "steps": [
+                                {
+                                  "id": "step-subj102-nested-001",
+                                  "name": "Send Eligibility Request",
+                                  "description": "The platform sends an eligibility request to the insurance provider.",
+                                  "sequence_order": 1,
+                                  "attributes": [
+                                    {
+                                      "attribute_definition_id": "attr-107",
+                                      "attribute_name": "Insurance Provider",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 1,
+                                      "relationship_type": "primary"
+                                    },
+                                    {
+                                      "attribute_definition_id": "attr-106",
+                                      "attribute_name": "EHR System",
+                                      "attribute_type": "system",
+                                      "sequence_order": 2,
+                                      "relationship_type": "system"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "step-subj102-nested-002",
+                                  "name": "Receive Eligibility Response",
+                                  "description": "The platform receives coverage details and displays estimated out-of-pocket costs.",
+                                  "sequence_order": 2,
+                                  "attributes": [
+                                    {
+                                      "attribute_definition_id": "attr-107",
+                                      "attribute_name": "Insurance Provider",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 1,
+                                      "relationship_type": "primary"
+                                    },
+                                    {
+                                      "attribute_definition_id": "attr-101",
+                                      "attribute_name": "Patient",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 2,
+                                      "relationship_type": "secondary"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "id": "phase-subj102-nested-002",
+                              "name": "Handle Preauthorization",
+                              "color": "#EC4899",
+                              "sequence_order": 2,
+                              "steps": [
+                                {
+                                  "id": "step-subj102-nested-003",
+                                  "name": "Request Preauthorization",
+                                  "description": "The system initiates a preauthorization request if required.",
+                                  "sequence_order": 1,
+                                  "attributes": [
+                                    {
+                                      "attribute_definition_id": "attr-103",
+                                      "attribute_name": "Care Coordinator",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 1,
+                                      "relationship_type": "primary"
+                                    },
+                                    {
+                                      "attribute_definition_id": "attr-107",
+                                      "attribute_name": "Insurance Provider",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 2,
+                                      "relationship_type": "secondary"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "step-subj102-nested-004",
+                                  "name": "Notify Patient of Status",
+                                  "description": "I receive updates when preauthorization is approved or denied.",
+                                  "sequence_order": 2,
+                                  "attributes": [
+                                    {
+                                      "attribute_definition_id": "attr-101",
+                                      "attribute_name": "Patient",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 1,
+                                      "relationship_type": "primary"
+                                    },
+                                    {
+                                      "attribute_definition_id": "attr-117",
+                                      "attribute_name": "Push Notification",
+                                      "attribute_type": "channel",
+                                      "sequence_order": 2,
+                                      "relationship_type": "channel"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
                       }
                     ]
                   }
@@ -532,108 +723,115 @@
               }
             },
             {
-              "id": "step-j2-002",
-              "name": "Complete Purchase",
-              "description": "I finalize my purchase and receive order confirmation",
+              "id": "step-j102-002",
+              "name": "Select Clinician",
+              "description": "I choose a clinician from the filtered results.",
               "sequence_order": 2,
               "attributes": [
                 {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
                   "attribute_type": "actor",
                   "sequence_order": 1,
                   "relationship_type": "primary"
                 },
                 {
-                  "attribute_definition_id": "attr-005",
-                  "attribute_name": "Order",
-                  "attribute_type": "action",
+                  "attribute_definition_id": "attr-102",
+                  "attribute_name": "Clinician",
+                  "attribute_type": "actor",
                   "sequence_order": 2,
-                  "relationship_type": "action"
+                  "relationship_type": "secondary"
                 }
               ]
             }
           ]
         },
         {
-          "id": "phase-j2-002",
-          "name": "Order Fulfillment",
+          "id": "phase-j102-002",
+          "name": "Book Appointment",
           "color": "#84CC16",
           "sequence_order": 2,
           "steps": [
             {
-              "id": "step-j2-003",
-              "name": "Receive Order Confirmation",
-              "description": "I receive email confirmation of my order",
+              "id": "step-j102-003",
+              "name": "Choose Time Slot",
+              "description": "I pick a time slot that works for both me and the clinician.",
               "sequence_order": 1,
               "attributes": [
                 {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
                   "attribute_type": "actor",
                   "sequence_order": 1,
                   "relationship_type": "primary"
                 },
                 {
-                  "attribute_definition_id": "attr-005",
-                  "attribute_name": "Order",
-                  "attribute_type": "action",
+                  "attribute_definition_id": "attr-109",
+                  "attribute_name": "Appointment",
+                  "attribute_type": "thing",
+                  "sequence_order": 2,
+                  "relationship_type": "object"
+                }
+              ]
+            },
+            {
+              "id": "step-j102-004",
+              "name": "Confirm Appointment",
+              "description": "I confirm the appointment and see the booking summary.",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-109",
+                  "attribute_name": "Appointment",
+                  "attribute_type": "thing",
                   "sequence_order": 2,
                   "relationship_type": "object"
                 }
               ],
               "has_subjourney": true,
               "subjourney": {
-                "name": "Order Processing & Tracking",
-                "description": "Detailed order processing and tracking subjourney",
-                "summary": "Subjourney covering order processing and shipment tracking",
+                "name": "Booking Confirmation & Reminders",
+                "description": "Subjourney covering confirmation messages and reminder notifications.",
+                "summary": "Subjourney for confirmation, calendar, and reminder touchpoints.",
                 "phases": [
                   {
-                    "id": "phase-subj2-003",
-                    "name": "Order Processing",
+                    "id": "phase-subj102-003",
+                    "name": "Confirmation Messaging",
                     "color": "#A855F7",
                     "sequence_order": 1,
                     "steps": [
                       {
-                        "id": "step-subj2-005",
-                        "name": "Order Confirmation Email",
-                        "description": "I receive and review my order confirmation email",
+                        "id": "step-subj102-005",
+                        "name": "Receive Confirmation Email",
+                        "description": "I receive an email with appointment details and instructions.",
                         "sequence_order": 1,
                         "attributes": [
                           {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
                             "attribute_type": "actor",
                             "sequence_order": 1,
                             "relationship_type": "primary"
                           },
                           {
-                            "attribute_definition_id": "attr-005",
-                            "attribute_name": "Order",
-                            "attribute_type": "action",
+                            "attribute_definition_id": "attr-116",
+                            "attribute_name": "Email",
+                            "attribute_type": "channel",
                             "sequence_order": 2,
-                            "relationship_type": "object"
-                          }
-                        ]
-                      },
-                      {
-                        "id": "step-subj2-006",
-                        "name": "Track Order Status",
-                        "description": "I check the status of my order online",
-                        "sequence_order": 2,
-                        "attributes": [
-                          {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
-                            "attribute_type": "actor",
-                            "sequence_order": 1,
-                            "relationship_type": "primary"
+                            "relationship_type": "channel"
                           },
                           {
-                            "attribute_definition_id": "attr-005",
-                            "attribute_name": "Order",
-                            "attribute_type": "action",
-                            "sequence_order": 2,
+                            "attribute_definition_id": "attr-109",
+                            "attribute_name": "Appointment",
+                            "attribute_type": "thing",
+                            "sequence_order": 3,
                             "relationship_type": "object"
                           }
                         ]
@@ -641,27 +839,177 @@
                     ]
                   },
                   {
-                    "id": "phase-subj2-004",
-                    "name": "Shipment Tracking",
-                    "color": "#F97316",
+                    "id": "phase-subj102-004",
+                    "name": "Automated Reminders",
+                    "color": "#FBBF24",
                     "sequence_order": 2,
                     "steps": [
                       {
-                        "id": "step-subj2-007",
-                        "name": "Receive Shipping Notification",
-                        "description": "I receive notification that my order has shipped",
+                        "id": "step-subj102-006",
+                        "name": "Receive Push Reminder",
+                        "description": "I receive a reminder notification on my phone before the visit.",
                         "sequence_order": 1,
                         "attributes": [
                           {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
                             "attribute_type": "actor",
                             "sequence_order": 1,
                             "relationship_type": "primary"
                           },
                           {
-                            "attribute_definition_id": "attr-006",
-                            "attribute_name": "Delivery Service",
+                            "attribute_definition_id": "attr-110",
+                            "attribute_name": "Notification Service",
+                            "attribute_type": "system",
+                            "sequence_order": 2,
+                            "relationship_type": "system"
+                          },
+                          {
+                            "attribute_definition_id": "attr-117",
+                            "attribute_name": "Push Notification",
+                            "attribute_type": "channel",
+                            "sequence_order": 3,
+                            "relationship_type": "channel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "phase-j102-003",
+          "name": "Pre-Visit Preparation",
+          "color": "#0F766E",
+          "sequence_order": 3,
+          "steps": [
+            {
+              "id": "step-j102-005",
+              "name": "Complete Pre-Visit Forms",
+              "description": "I fill out any required questionnaires or consent forms before the visit.",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-106",
+                  "attribute_name": "EHR System",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                }
+              ]
+            },
+            {
+              "id": "step-j102-006",
+              "name": "Test Video Connection",
+              "description": "I test my camera, microphone, and connection using the app.",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-104",
+                  "attribute_name": "Telehealth App",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                },
+                {
+                  "attribute_definition_id": "attr-115",
+                  "attribute_name": "Video Call",
+                  "attribute_type": "channel",
+                  "sequence_order": 3,
+                  "relationship_type": "channel"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "journey-103",
+      "name": "Consultation, Follow-Up & Ongoing Care Journey",
+      "description": "Journey from joining the virtual consultation to long-term care plan management.",
+      "summary": "Phase 3 of the patient lifecycle: consultation, prescriptions, tests, and ongoing care.",
+      "is_subjourney": false,
+      "phases": [
+        {
+          "id": "phase-j103-001",
+          "name": "Live Consultation",
+          "color": "#EC4899",
+          "sequence_order": 1,
+          "steps": [
+            {
+              "id": "step-j103-001",
+              "name": "Join Virtual Visit",
+              "description": "I join the scheduled video appointment with my clinician.",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-102",
+                  "attribute_name": "Clinician",
+                  "attribute_type": "actor",
+                  "sequence_order": 2,
+                  "relationship_type": "secondary"
+                },
+                {
+                  "attribute_definition_id": "attr-115",
+                  "attribute_name": "Video Call",
+                  "attribute_type": "channel",
+                  "sequence_order": 3,
+                  "relationship_type": "channel"
+                }
+              ],
+              "has_subjourney": true,
+              "subjourney": {
+                "name": "In-Call Experience",
+                "description": "Subjourney covering clinical assessment, documentation, and bedside manner.",
+                "summary": "Subjourney focused on the flow of the virtual consultation.",
+                "phases": [
+                  {
+                    "id": "phase-subj103-001",
+                    "name": "Clinical Assessment",
+                    "color": "#22C55E",
+                    "sequence_order": 1,
+                    "steps": [
+                      {
+                        "id": "step-subj103-001",
+                        "name": "Describe Symptoms",
+                        "description": "I share my symptoms and concerns with the clinician.",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-102",
+                            "attribute_name": "Clinician",
                             "attribute_type": "actor",
                             "sequence_order": 2,
                             "relationship_type": "secondary"
@@ -669,24 +1017,234 @@
                         ]
                       },
                       {
-                        "id": "step-subj2-008",
-                        "name": "Track Shipment",
-                        "description": "I track my shipment using the provided tracking number",
+                        "id": "step-subj103-002",
+                        "name": "Clinician Documents Notes",
+                        "description": "The clinician documents notes directly into the EHR system.",
                         "sequence_order": 2,
                         "attributes": [
                           {
-                            "attribute_definition_id": "attr-001",
-                            "attribute_name": "Customer",
+                            "attribute_definition_id": "attr-102",
+                            "attribute_name": "Clinician",
                             "attribute_type": "actor",
                             "sequence_order": 1,
                             "relationship_type": "primary"
                           },
                           {
-                            "attribute_definition_id": "attr-006",
-                            "attribute_name": "Delivery Service",
+                            "attribute_definition_id": "attr-106",
+                            "attribute_name": "EHR System",
+                            "attribute_type": "system",
+                            "sequence_order": 2,
+                            "relationship_type": "system"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "phase-subj103-002",
+                    "name": "Care Decision",
+                    "color": "#F97316",
+                    "sequence_order": 2,
+                    "steps": [
+                      {
+                        "id": "step-subj103-003",
+                        "name": "Agree Care Plan",
+                        "description": "We align on a care plan that may include medication and tests.",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-102",
+                            "attribute_name": "Clinician",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-120",
+                            "attribute_name": "Care Plan",
+                            "attribute_type": "thing",
+                            "sequence_order": 2,
+                            "relationship_type": "object"
+                          }
+                        ],
+                        "has_subjourney": true,
+                        "subjourney": {
+                          "name": "Care Plan Authoring Flow",
+                          "description": "Nested subjourney for defining goals, tasks, and follow-up schedule.",
+                          "summary": "Nested subjourney covering care plan structure and patient understanding.",
+                          "phases": [
+                            {
+                              "id": "phase-subj103-nested-001",
+                              "name": "Define Goals",
+                              "color": "#4F46E5",
+                              "sequence_order": 1,
+                              "steps": [
+                                {
+                                  "id": "step-subj103-nested-001",
+                                  "name": "Capture Clinical Goals",
+                                  "description": "The clinician defines measurable clinical goals.",
+                                  "sequence_order": 1,
+                                  "attributes": [
+                                    {
+                                      "attribute_definition_id": "attr-102",
+                                      "attribute_name": "Clinician",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 1,
+                                      "relationship_type": "primary"
+                                    },
+                                    {
+                                      "attribute_definition_id": "attr-120",
+                                      "attribute_name": "Care Plan",
+                                      "attribute_type": "thing",
+                                      "sequence_order": 2,
+                                      "relationship_type": "object"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "id": "phase-subj103-nested-002",
+                              "name": "Schedule Follow-Ups",
+                              "color": "#F59E0B",
+                              "sequence_order": 2,
+                              "steps": [
+                                {
+                                  "id": "step-subj103-nested-002",
+                                  "name": "Propose Follow-Up Visits",
+                                  "description": "The clinician proposes follow-up appointment cadence.",
+                                  "sequence_order": 1,
+                                  "attributes": [
+                                    {
+                                      "attribute_definition_id": "attr-102",
+                                      "attribute_name": "Clinician",
+                                      "attribute_type": "actor",
+                                      "sequence_order": 1,
+                                      "relationship_type": "primary"
+                                    },
+                                    {
+                                      "attribute_definition_id": "attr-109",
+                                      "attribute_name": "Appointment",
+                                      "attribute_type": "thing",
+                                      "sequence_order": 2,
+                                      "relationship_type": "object"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "phase-j103-002",
+          "name": "Medication & Testing",
+          "color": "#22C55E",
+          "sequence_order": 2,
+          "steps": [
+            {
+              "id": "step-j103-002",
+              "name": "Receive Prescription",
+              "description": "I receive a digital prescription from the clinician.",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-112",
+                  "attribute_name": "Prescription",
+                  "attribute_type": "thing",
+                  "sequence_order": 2,
+                  "relationship_type": "object"
+                },
+                {
+                  "attribute_definition_id": "attr-111",
+                  "attribute_name": "Pharmacy",
+                  "attribute_type": "actor",
+                  "sequence_order": 3,
+                  "relationship_type": "secondary"
+                }
+              ],
+              "has_subjourney": true,
+              "subjourney": {
+                "name": "Prescription Fulfillment Flow",
+                "description": "Subjourney from prescription issuance to medication pickup or delivery.",
+                "summary": "Subjourney tracking prescription routing and pickup.",
+                "phases": [
+                  {
+                    "id": "phase-subj103-003",
+                    "name": "Route Prescription",
+                    "color": "#0EA5E9",
+                    "sequence_order": 1,
+                    "steps": [
+                      {
+                        "id": "step-subj103-004",
+                        "name": "Send Prescription to Pharmacy",
+                        "description": "The platform routes the prescription to my preferred pharmacy.",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-106",
+                            "attribute_name": "EHR System",
+                            "attribute_type": "system",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-111",
+                            "attribute_name": "Pharmacy",
                             "attribute_type": "actor",
                             "sequence_order": 2,
                             "relationship_type": "secondary"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "phase-subj103-004",
+                    "name": "Pickup or Delivery",
+                    "color": "#F97316",
+                    "sequence_order": 2,
+                    "steps": [
+                      {
+                        "id": "step-subj103-005",
+                        "name": "Receive Ready Notification",
+                        "description": "I get notified that my medication is ready for pickup or out for delivery.",
+                        "sequence_order": 1,
+                        "attributes": [
+                          {
+                            "attribute_definition_id": "attr-101",
+                            "attribute_name": "Patient",
+                            "attribute_type": "actor",
+                            "sequence_order": 1,
+                            "relationship_type": "primary"
+                          },
+                          {
+                            "attribute_definition_id": "attr-110",
+                            "attribute_name": "Notification Service",
+                            "attribute_type": "system",
+                            "sequence_order": 2,
+                            "relationship_type": "system"
+                          },
+                          {
+                            "attribute_definition_id": "attr-117",
+                            "attribute_name": "Push Notification",
+                            "attribute_type": "channel",
+                            "sequence_order": 3,
+                            "relationship_type": "channel"
                           }
                         ]
                       }
@@ -696,24 +1254,126 @@
               }
             },
             {
-              "id": "step-j2-004",
-              "name": "Receive Delivery",
-              "description": "I receive my order at my doorstep",
+              "id": "step-j103-003",
+              "name": "Complete Lab Tests",
+              "description": "I visit a diagnostic lab to complete any ordered tests.",
               "sequence_order": 2,
               "attributes": [
                 {
-                  "attribute_definition_id": "attr-001",
-                  "attribute_name": "Customer",
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
                   "attribute_type": "actor",
                   "sequence_order": 1,
                   "relationship_type": "primary"
                 },
                 {
-                  "attribute_definition_id": "attr-006",
-                  "attribute_name": "Delivery Service",
+                  "attribute_definition_id": "attr-113",
+                  "attribute_name": "Diagnostic Lab",
                   "attribute_type": "actor",
                   "sequence_order": 2,
                   "relationship_type": "secondary"
+                },
+                {
+                  "attribute_definition_id": "attr-114",
+                  "attribute_name": "Test Order",
+                  "attribute_type": "thing",
+                  "sequence_order": 3,
+                  "relationship_type": "object"
+                },
+                {
+                  "attribute_definition_id": "attr-118",
+                  "attribute_name": "Clinic Location",
+                  "attribute_type": "place",
+                  "sequence_order": 4,
+                  "relationship_type": "place"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "phase-j103-003",
+          "name": "Results, Payment & Long-Term Care",
+          "color": "#6366F1",
+          "sequence_order": 3,
+          "steps": [
+            {
+              "id": "step-j103-004",
+              "name": "View Test Results",
+              "description": "I receive and review my test results in the portal.",
+              "sequence_order": 1,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-106",
+                  "attribute_name": "EHR System",
+                  "attribute_type": "system",
+                  "sequence_order": 2,
+                  "relationship_type": "system"
+                },
+                {
+                  "attribute_definition_id": "attr-116",
+                  "attribute_name": "Email",
+                  "attribute_type": "channel",
+                  "sequence_order": 3,
+                  "relationship_type": "channel"
+                }
+              ]
+            },
+            {
+              "id": "step-j103-005",
+              "name": "Complete Payment",
+              "description": "I pay any outstanding balance related to my visit.",
+              "sequence_order": 2,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-119",
+                  "attribute_name": "Payment Transaction",
+                  "attribute_type": "action",
+                  "sequence_order": 2,
+                  "relationship_type": "action"
+                }
+              ]
+            },
+            {
+              "id": "step-j103-006",
+              "name": "Track Long-Term Care Plan",
+              "description": "I track my care plan tasks, follow-ups, and goals over time.",
+              "sequence_order": 3,
+              "attributes": [
+                {
+                  "attribute_definition_id": "attr-101",
+                  "attribute_name": "Patient",
+                  "attribute_type": "actor",
+                  "sequence_order": 1,
+                  "relationship_type": "primary"
+                },
+                {
+                  "attribute_definition_id": "attr-120",
+                  "attribute_name": "Care Plan",
+                  "attribute_type": "thing",
+                  "sequence_order": 2,
+                  "relationship_type": "object"
+                },
+                {
+                  "attribute_definition_id": "attr-110",
+                  "attribute_name": "Notification Service",
+                  "attribute_type": "system",
+                  "sequence_order": 3,
+                  "relationship_type": "system"
                 }
               ]
             }
@@ -723,4 +1383,3 @@
     }
   ]
 }
-

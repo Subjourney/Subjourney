@@ -87,9 +87,16 @@ function ProjectCanvasInner({
     const flowNodes: Node[] = [];
     const flowEdges: Edge[] = [];
 
-    // Build a map from stepId -> parentJourneyId and stepId -> phase color
+    // Build a map from stepId -> parentJourneyId, stepId -> phase color, and stepId -> step
     const stepIdToJourneyId = new Map<string, string>();
     const stepIdToPhaseColor = new Map<string, string>();
+    const stepIdToStep = new Map<string, Step>();
+    const journeyIdToJourney = new Map<string, Journey>();
+
+    journeys.forEach((journey) => {
+      journeyIdToJourney.set(journey.id, journey);
+    });
+
     journeys.forEach((journey) => {
       const phases = journeyPhases[journey.id] || [];
       phases.forEach((phase) => {
@@ -97,6 +104,7 @@ function ProjectCanvasInner({
         steps.forEach((step) => {
           stepIdToJourneyId.set(step.id, journey.id);
           stepIdToPhaseColor.set(step.id, phase.color || '#3B82F6');
+          stepIdToStep.set(step.id, step);
         });
       });
     });
@@ -186,7 +194,9 @@ function ProjectCanvasInner({
       return String(a.id).localeCompare(String(b.id));
     });
 
-    // Create edges from final step of subjourneys to next sequential step in parent journey
+    // Create edges from final step of subjourneys to their continuation targets
+    // Default: next sequential step after the parent step
+    // Edge case: if parent step is last in a subjourney, "return" to the parent step of the parent subjourney (no arrow)
     journeys.forEach((subjourney) => {
       if (subjourney.is_subjourney && subjourney.parent_step_id) {
         const parentStepId = subjourney.parent_step_id;
@@ -194,63 +204,79 @@ function ProjectCanvasInner({
         if (parentJourneyId) {
           const subjourneySteps = journeyStepsMap.get(subjourney.id) || [];
           const parentSteps = journeyStepsMap.get(parentJourneyId) || [];
-          
+
           // Find the final step in the subjourney
           const finalSubjourneyStep = subjourneySteps[subjourneySteps.length - 1];
-          
+
           // Find the parent step and get its index
-          const parentStepIndex = parentSteps.findIndex(step => step.id === parentStepId);
-          
+          const parentStepIndex = parentSteps.findIndex((step) => step.id === parentStepId);
+
           if (finalSubjourneyStep && parentStepIndex >= 0) {
+            let targetStep: Step | undefined;
+            let isReturnToParentStep = false;
+
+            // Case 0: Explicit continuation via continue_step_id (if provided)
+            if (subjourney.continue_step_id) {
+              targetStep = stepIdToStep.get(subjourney.continue_step_id);
+            }
+
             // Case 1: There's a next step in the parent journey
-            if (parentStepIndex < parentSteps.length - 1) {
-              const nextStep = parentSteps[parentStepIndex + 1];
-              
-              flowEdges.push({
-                id: `edge-subjourney-${subjourney.id}-final-step-to-${nextStep.id}`,
-                source: subjourney.id,
-                sourceHandle: `step-${finalSubjourneyStep.id}-left`, // Left handle of final step in subjourney
-                target: parentJourneyId,
-                targetHandle: `step-${nextStep.id}-target`, // Target handle on right side of next step in parent
-                type: 'default',
-                style: {
-                  stroke: '#6B7280',
-                  strokeWidth: 2,
-                  strokeDasharray: '5,5',
-                },
-                markerEnd: {
-                  type: MarkerType.ArrowClosed,
-                  color: '#6B7280',
-                },
-              });
-            } 
-            // Case 2: Parent step is the last step - connect to first step of next top-level journey
-            else {
-              const parentJourneyIndex = parentJourneysSorted.findIndex(j => j.id === parentJourneyId);
+            if (!targetStep && parentStepIndex < parentSteps.length - 1) {
+              targetStep = parentSteps[parentStepIndex + 1];
+            }
+
+            // Case 2: Parent step is the last step AND parent journey is itself a subjourney.
+            // In this scenario, "return" to the parent step *within the base/parent subjourney* (no arrow).
+            if (!targetStep) {
+              const parentJourney = journeyIdToJourney.get(parentJourneyId);
+              if (parentJourney?.is_subjourney) {
+                targetStep = parentSteps[parentStepIndex];
+                isReturnToParentStep = true;
+              }
+            }
+
+            // Case 3: Fallback - parent step is last and parent journey is top-level.
+            // Keep existing behaviour: connect to first step of next top-level journey.
+            if (!targetStep) {
+              const parentJourneyIndex = parentJourneysSorted.findIndex((j) => j.id === parentJourneyId);
               if (parentJourneyIndex >= 0 && parentJourneyIndex < parentJourneysSorted.length - 1) {
                 const nextJourney = parentJourneysSorted[parentJourneyIndex + 1];
                 const nextJourneySteps = journeyStepsMap.get(nextJourney.id) || [];
                 const firstStepOfNextJourney = nextJourneySteps[0];
-                
                 if (firstStepOfNextJourney) {
-                  flowEdges.push({
-                    id: `edge-subjourney-${subjourney.id}-final-step-to-next-journey-${nextJourney.id}-first-step`,
-                    source: subjourney.id,
-                    sourceHandle: `step-${finalSubjourneyStep.id}-left`, // Left handle of final step in subjourney
-                    target: nextJourney.id,
-                    targetHandle: `step-${firstStepOfNextJourney.id}-target`, // Target handle on right side of first step in next journey
-                    type: 'default',
-                    style: {
-                      stroke: '#6B7280',
-                      strokeWidth: 2,
-                      strokeDasharray: '5,5',
-                    },
-                    markerEnd: {
-                      type: MarkerType.ArrowClosed,
-                      color: '#6B7280',
-                    },
-                  });
+                  targetStep = firstStepOfNextJourney;
                 }
+              }
+            }
+
+            if (targetStep) {
+              const targetJourneyId = stepIdToJourneyId.get(targetStep.id);
+              if (targetJourneyId) {
+                const baseStyle = {
+                  stroke: 'var(--color-connector-dashed)',
+                  strokeWidth: 2,
+                  strokeDasharray: '5,5',
+                } as React.CSSProperties;
+
+                const edge: Edge = {
+                  id: `edge-subjourney-${subjourney.id}-final-step-to-${targetStep.id}`,
+                  source: subjourney.id,
+                  sourceHandle: `step-${finalSubjourneyStep.id}-left`, // Left handle of final step in subjourney
+                  target: targetJourneyId,
+                  targetHandle: `step-${targetStep.id}-target`, // Target handle on right side of target step
+                  type: 'default',
+                  style: baseStyle,
+                };
+
+                // Only show an arrow when we're moving "forward" in the flow.
+                if (!isReturnToParentStep) {
+                  edge.markerEnd = {
+                    type: MarkerType.ArrowClosed,
+                    color: 'var(--color-connector-dashed)',
+                  };
+                }
+
+                flowEdges.push(edge);
               }
             }
           }
@@ -272,13 +298,13 @@ function ProjectCanvasInner({
         targetHandle: `journey-${nextJourney.id}-top`, // Top handle of next journey
         type: 'default',
         style: {
-          stroke: '#6B7280',
+          stroke: 'var(--color-connector-dashed)',
           strokeWidth: 2,
           strokeDasharray: '5,5',
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: '#6B7280',
+          color: 'var(--color-connector-dashed)',
         },
       });
     }
@@ -462,7 +488,7 @@ function ProjectCanvasInner({
       attributionPosition="bottom-left"
       panOnScroll={true}
       selectionOnDrag={true}
-      panOnDrag={false}
+      panOnDrag={[1]}
     >
       <Background color={backgroundDotColor || defaultDotColor} />
       <Controls />

@@ -41,7 +41,7 @@ export function JourneyNode(props: NodeProps) {
         // No minHeight - let content determine height naturally
         background: 'var(--surface-2)',
         border: 'solid 1px var(--color-border)',
-        borderRadius: 'var(--radius-lg)',
+        borderRadius: 'var(--radius-3xl)',
         boxShadow: isSelected
           ? 'var(--shadow-selected)'
           : 'var(--shadow-md)',

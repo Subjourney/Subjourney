@@ -14,6 +14,7 @@ import type {
   Attribute,
   Flow,
 } from '../types';
+import { attributesApi } from '../api';
 import type {
   SelectionState,
   UIState,
@@ -59,6 +60,11 @@ interface AppStore extends SelectionState, UIState, DataState {
   isSubjourneyLoading: (subjourneyId: EntityId) => boolean;
   clearAllLoading: () => void;
 
+  // Animation state actions
+  markStepAsNewlyAdded: (stepId: EntityId) => void;
+  clearNewlyAddedStep: (stepId: EntityId) => void;
+  isStepNewlyAdded: (stepId: EntityId) => boolean;
+
   // Data actions
   setCurrentJourney: (journey: Journey | null) => void;
   setPhases: (phases: Phase[]) => void;
@@ -76,6 +82,17 @@ interface AppStore extends SelectionState, UIState, DataState {
   getCardsForStep: (stepId: EntityId) => Card[];
   getStepsForPhase: (phaseId: EntityId) => Step[];
   getPhasesForJourney: (journeyId: EntityId) => Phase[];
+
+  // Attribute instance selectors and actions
+  getAttributesForStep: (stepId: EntityId) => Attribute[];
+  loadStepAttributesForJourney: (journey: Journey) => Promise<void>;
+  addStepAttributeOptimistic: (stepId: EntityId, attribute: Attribute) => Promise<void>;
+  removeStepAttributeOptimistic: (stepId: EntityId, index: number) => Promise<void>;
+  changeStepAttributeOptimistic: (stepId: EntityId, index: number, attribute: Attribute) => Promise<void>;
+  reorderStepAttributesOptimistic: (stepId: EntityId, oldIndex: number, newIndex: number) => void;
+
+  // Step optimistic actions
+  addStepToRightOptimistic: (rightOfStepId: EntityId) => Promise<void>;
 
   // Validation
   validateSelection: (journeyNodes?: unknown[]) => void;
@@ -108,6 +125,7 @@ export const useAppStore = create<AppStore>()(
       isServiceBlueprintOpen: false,
       draggedBlueprintItem: null,
       isCenterWhenClicked: false,
+      newlyAddedSteps: new Set(),
 
       // Data state
       currentJourney: null,
@@ -116,6 +134,7 @@ export const useAppStore = create<AppStore>()(
       cards: [],
       attributes: [],
       flows: [],
+      stepAttributes: {},
 
       // ===== SELECTION ACTIONS =====
 
@@ -317,6 +336,7 @@ export const useAppStore = create<AppStore>()(
           selectedStep: state.selectedStep,
           selectedPhase: state.selectedPhase,
           selectedJourney: state.selectedJourney,
+          selectedProject: state.selectedProject,
           selectedAttribute: state.selectedAttribute,
           selectedFirstAttributeType: state.selectedFirstAttributeType,
           selectedCard: state.selectedCard,
@@ -449,6 +469,22 @@ export const useAppStore = create<AppStore>()(
         });
       },
 
+      // ===== ANIMATION STATE ACTIONS =====
+
+      markStepAsNewlyAdded: (stepId) => {
+        set((state) => ({
+          newlyAddedSteps: new Set([...state.newlyAddedSteps, stepId]),
+        }));
+      },
+
+      clearNewlyAddedStep: (stepId) => {
+        set((state) => ({
+          newlyAddedSteps: new Set([...state.newlyAddedSteps].filter((id) => id !== stepId)),
+        }));
+      },
+
+      isStepNewlyAdded: (stepId) => get().newlyAddedSteps.has(stepId),
+
       // ===== DATA ACTIONS =====
 
       setCurrentJourney: (journey) => {
@@ -535,6 +571,270 @@ export const useAppStore = create<AppStore>()(
 
       getPhasesForJourney: (journeyId) => {
         return get().phases.filter((p) => p.journey_id === journeyId);
+      },
+
+      // ===== ATTRIBUTE INSTANCE SELECTORS & ACTIONS =====
+
+      getAttributesForStep: (stepId) => {
+        const map = get().stepAttributes || {};
+        return map[String(stepId)] || [];
+      },
+
+      loadStepAttributesForJourney: async (journey) => {
+        if (!journey.allSteps || journey.allSteps.length === 0) {
+          return;
+        }
+
+        // Collect all step IDs (including subjourney steps)
+        const allStepIds = [...journey.allSteps.map((s) => s.id)];
+        if (journey.subjourneys) {
+          journey.subjourneys.forEach((subjourney) => {
+            if (subjourney.allSteps) {
+              allStepIds.push(...subjourney.allSteps.map((s) => s.id));
+            }
+          });
+        }
+
+        // Fetch step attributes for all steps in parallel
+        const stepAttributePromises = allStepIds.map((stepId) =>
+          attributesApi.getStepAttributes(String(stepId)).catch((err) => {
+            console.error(`Failed to load attributes for step ${stepId}:`, err);
+            return [];
+          })
+        );
+
+        const stepAttributesResults = await Promise.all(stepAttributePromises);
+
+        // Collect all unique attribute definition IDs
+        const attributeDefIds = new Set<string>();
+        stepAttributesResults.forEach((stepAttrs) => {
+          stepAttrs.forEach((stepAttr) => {
+            attributeDefIds.add(stepAttr.attribute_definition_id);
+          });
+        });
+
+        // Fetch all attribute definitions in parallel
+        const attributePromises = Array.from(attributeDefIds).map((attrId) =>
+          attributesApi.getAttribute(attrId).catch(() => null)
+        );
+
+        const attributes = (await Promise.all(attributePromises)).filter(
+          (attr): attr is Attribute => attr !== null
+        );
+
+        // Update attributes in store if we got any new ones
+        if (attributes.length > 0) {
+          const currentAttrs = get().attributes;
+          const attrMap = new Map(currentAttrs.map((a) => [a.id, a]));
+          attributes.forEach((attr) => {
+            attrMap.set(attr.id, attr);
+          });
+          set({ attributes: Array.from(attrMap.values()) });
+        }
+
+        // Map step attributes to attribute definitions, grouped by step ID
+        const stepAttributesMap: Record<string, Attribute[]> = {};
+        stepAttributesResults.forEach((stepAttrs, idx) => {
+          const stepId = allStepIds[idx];
+          const attrDefs = stepAttrs
+            .map((stepAttr) => {
+              return attributes.find((attr) => attr.id === stepAttr.attribute_definition_id);
+            })
+            .filter((attr): attr is Attribute => attr !== undefined)
+            .sort((a, b) => {
+              // Sort by sequence_order from step_attributes
+              const stepAttrA = stepAttrs.find((sa) => sa.attribute_definition_id === a.id);
+              const stepAttrB = stepAttrs.find((sa) => sa.attribute_definition_id === b.id);
+              const orderA = stepAttrA?.sequence_order ?? 0;
+              const orderB = stepAttrB?.sequence_order ?? 0;
+              return orderA - orderB;
+            });
+          stepAttributesMap[String(stepId)] = attrDefs;
+        });
+
+        // Update stepAttributes in store
+        const currentStepAttrs = get().stepAttributes || {};
+        set({
+          stepAttributes: {
+            ...currentStepAttrs,
+            ...stepAttributesMap,
+          },
+        });
+      },
+
+      addStepAttributeOptimistic: async (stepId, attribute) => {
+        const sid = String(stepId);
+        const map = get().stepAttributes || {};
+        const prev = map[sid] || [];
+        // optimistic update
+        set({ stepAttributes: { ...map, [sid]: [...prev, attribute] } });
+        try {
+          await attributesApi.addAttributeToStep(sid, String(attribute.id), 'primary');
+        } catch (err) {
+          console.error('addAttributeToStep failed', err);
+          // revert
+          set({ stepAttributes: { ...map, [sid]: prev } });
+          throw err;
+        }
+      },
+
+      removeStepAttributeOptimistic: async (stepId, index) => {
+        const sid = String(stepId);
+        const map = get().stepAttributes || {};
+        const prev = map[sid] || [];
+        const removed = prev[index];
+        if (!removed) return;
+        const next = prev.filter((_, i) => i !== index);
+        // optimistic update
+        set({ stepAttributes: { ...map, [sid]: next } });
+        try {
+          await attributesApi.removeAttributeFromStep(sid, String(removed.id));
+        } catch (err) {
+          console.error('removeAttributeFromStep failed', err);
+          // revert
+          set({ stepAttributes: { ...map, [sid]: prev } });
+          throw err;
+        }
+      },
+
+      changeStepAttributeOptimistic: async (stepId, index, attribute) => {
+        const sid = String(stepId);
+        const map = get().stepAttributes || {};
+        const prev = map[sid] || [];
+        const prevAttr = prev[index];
+        const next = [...prev];
+        next[index] = attribute;
+        // optimistic update
+        set({ stepAttributes: { ...map, [sid]: next } });
+        try {
+          if (prevAttr) {
+            await attributesApi.removeAttributeFromStep(sid, String(prevAttr.id));
+          }
+          await attributesApi.addAttributeToStep(sid, String(attribute.id), 'primary');
+        } catch (err) {
+          console.error('change attribute failed', err);
+          // revert
+          set({ stepAttributes: { ...map, [sid]: prev } });
+          throw err;
+        }
+      },
+
+      reorderStepAttributesOptimistic: (stepId, oldIndex, newIndex) => {
+        const sid = String(stepId);
+        const map = get().stepAttributes || {};
+        const prev = map[sid] || [];
+        const arr = [...prev];
+        const [moved] = arr.splice(oldIndex, 1);
+        if (!moved) return;
+        arr.splice(newIndex, 0, moved);
+        set({ stepAttributes: { ...map, [sid]: arr } });
+        // TODO: Persist sequence order when backend endpoint available
+      },
+
+      // ===== STEP OPTIMISTIC ACTIONS =====
+      addStepToRightOptimistic: async (rightOfStepId) => {
+        const state = get();
+        const { steps, currentJourney } = state;
+        const rightStep = steps.find((s) => s.id === rightOfStepId);
+        if (!rightStep || !currentJourney) return;
+
+        // Mark loading for the phase (disables button/spinner)
+        state.setStepLoading(rightStep.phase_id, true);
+
+        // Compute target insertion position within phase
+        const phaseSteps = steps
+          .filter((s) => s.phase_id === rightStep.phase_id)
+          .sort((a, b) => a.sequence_order - b.sequence_order);
+        const rightIndex = phaseSteps.findIndex((s) => s.id === rightOfStepId);
+        const nextStep = rightIndex >= 0 && rightIndex < phaseSteps.length - 1 ? phaseSteps[rightIndex + 1] : null;
+        const tempSequence =
+          nextStep != null
+            ? (rightStep.sequence_order + nextStep.sequence_order) / 2
+            : rightStep.sequence_order + 1;
+
+        // Snapshot previous state for revert
+        const prevSteps = steps;
+        const prevJourney = currentJourney;
+
+        // Create a temporary client-only step (optimistic)
+        const tempId = `temp-step-${Date.now()}`;
+        const tempStep: Step = {
+          id: tempId,
+          team_id: rightStep.team_id,
+          phase_id: rightStep.phase_id,
+          name: 'New Step',
+          description: '',
+          sequence_order: tempSequence,
+          is_subjourney: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        // Optimistically update store: steps and currentJourney.allSteps
+        set({
+          steps: [...prevSteps, tempStep],
+          currentJourney: {
+            ...prevJourney,
+            allSteps: [...(prevJourney.allSteps || []), tempStep],
+          },
+        });
+
+        try {
+          // 1) Persist: create step on server
+          const createdStep = await (await import('../api')).journeysApi.createStep(rightStep.phase_id, {
+            name: tempStep.name,
+            sequence_order: Math.ceil(tempSequence),
+          });
+
+          // 2) Refresh journey structure from server to ensure durability on refresh
+          const refreshedAfterCreate = await (await import('../api')).journeysApi.getJourney(currentJourney.id, true);
+          state.setCurrentJourney(refreshedAfterCreate);
+
+          // 3) Ensure ordering: place new step right of target and persist order (best effort)
+          const phaseStepsAfterCreate = (refreshedAfterCreate.allSteps || [])
+            .filter((s) => s.phase_id === rightStep.phase_id)
+            .sort((a, b) => a.sequence_order - b.sequence_order)
+            .map((s) => s.id);
+
+          if (createdStep?.id && phaseStepsAfterCreate.includes(createdStep.id)) {
+            const withoutNew = phaseStepsAfterCreate.filter((id) => id !== createdStep.id);
+            const insertAfterIndex = withoutNew.indexOf(rightOfStepId);
+            const desiredOrder = [...withoutNew];
+            desiredOrder.splice(insertAfterIndex + 1, 0, createdStep.id);
+
+            try {
+              await (await import('../api')).journeysApi.reorderSteps(rightStep.phase_id, desiredOrder);
+              const refreshed = await (await import('../api')).journeysApi.getJourney(currentJourney.id, true);
+              state.setCurrentJourney(refreshed);
+              // Select the newly created step and mark it for animation
+              if (createdStep?.id) {
+                state.select('selectedStep', createdStep.id);
+                state.markStepAsNewlyAdded(createdStep.id);
+              }
+            } catch (reorderErr) {
+              console.warn('Failed to reorder steps after creation; using server ordering', reorderErr);
+              // Still select the step even if reorder fails
+              if (createdStep?.id) {
+                state.select('selectedStep', createdStep.id);
+                state.markStepAsNewlyAdded(createdStep.id);
+              }
+            }
+          } else if (createdStep?.id) {
+            // If reorder logic didn't run, still select the new step
+            state.select('selectedStep', createdStep.id);
+            state.markStepAsNewlyAdded(createdStep.id);
+          }
+        } catch (err) {
+          console.error('Failed to create step, reverting optimistic UI', err);
+          // Revert
+          set({
+            steps: prevSteps,
+            currentJourney: prevJourney,
+          });
+          throw err;
+        } finally {
+          state.setStepLoading(rightStep.phase_id, false);
+        }
       },
 
       // ===== VALIDATION =====

@@ -197,13 +197,71 @@ def create_attributes(supabase: Client, team_id: str, mock_data: Dict[str, Any])
     return attribute_map
 
 
+def compute_continue_step_id_from_mock(
+    parent_step_name: str,
+    phases_data: List[Dict[str, Any]],
+    step_map: Dict[str, str],
+    parent_journey_is_subjourney: bool,
+) -> Optional[str]:
+    """
+    Compute a continue_step_id for a subjourney based on mock JSON data.
+
+    This mirrors the runtime logic:
+    - Order phases by sequence_order, then steps within each phase by sequence_order.
+    - If there's a next step after the parent step, continue to that.
+    - Otherwise, if the parent journey is a subjourney, loop back to the parent step itself.
+    - Otherwise, return None.
+    """
+    # Build ordered list of (phase_seq, step_seq, step_name)
+    ordered_steps: List[Dict[str, Any]] = []
+    for phase in phases_data:
+        phase_seq = phase.get("sequence_order", 1)
+        for step in phase.get("steps", []):
+            ordered_steps.append(
+                {
+                    "phase_sequence_order": phase_seq,
+                    "step_sequence_order": step.get("sequence_order", 1),
+                    "step_name": step.get("name"),
+                }
+            )
+
+    if not ordered_steps:
+        return None
+
+    ordered_steps.sort(
+        key=lambda s: (s["phase_sequence_order"], s["step_sequence_order"])
+    )
+
+    # Find index of the parent step by name
+    names_in_order = [s["step_name"] for s in ordered_steps]
+    try:
+        parent_index = names_in_order.index(parent_step_name)
+    except ValueError:
+        # Parent step name not found in this journey's steps
+        return None
+
+    # Case 1: there's a next step in this journey
+    if parent_index < len(ordered_steps) - 1:
+        next_step_name = names_in_order[parent_index + 1]
+        next_step_id = step_map.get(next_step_name)
+        return next_step_id
+
+    # Case 2: parent step is last AND parent journey is itself a subjourney
+    if parent_journey_is_subjourney:
+        return step_map.get(parent_step_name)
+
+    # No robust default
+    return None
+
+
 def create_journey(
     supabase: Client,
     team_id: str,
     project_id: str,
     journey_data: Dict[str, Any],
     is_subjourney: bool = False,
-    parent_step_id: Optional[str] = None
+    parent_step_id: Optional[str] = None,
+    continue_step_id: Optional[str] = None
 ) -> Optional[str]:
     """Create journey from journey data."""
     journey_name = journey_data.get("name", "Untitled Journey")
@@ -227,6 +285,8 @@ def create_journey(
     
     if parent_step_id:
         journey_insert_data["parent_step_id"] = parent_step_id
+    if continue_step_id:
+        journey_insert_data["continue_step_id"] = continue_step_id
     
     try:
         response = supabase.table("journeys").insert(journey_insert_data).execute()
@@ -293,9 +353,10 @@ def create_steps(
     journey_id: str,
     project_id: str
 ) -> Dict[str, Dict[str, Any]]:
-    """Create steps from phases data. Returns step_map and subjourney_info."""
+    """Create steps from phases data. Returns step_map, subjourney_info, and ordered step names."""
     step_map = {}  # Maps step name to step ID
     subjourney_info = {}  # Maps step name to subjourney data
+    ordered_step_names: List[str] = []  # Steps in visual sequence order
     timestamp = get_timestamp()
     
     for phase in phases_data:
@@ -331,6 +392,7 @@ def create_steps(
                 if response.data:
                     step_id = response.data[0]["id"]
                     step_map[step_name] = step_id
+                    ordered_step_names.append(step_name)
                     print_success(f"Step created: {step_name} (ID: {step_id})")
                     
                     # Create step attributes
@@ -369,7 +431,7 @@ def create_steps(
             except Exception as e:
                 print_error(f"Failed to create step: {step_name} - {str(e)}")
     
-    return step_map, subjourney_info
+    return step_map, subjourney_info, ordered_step_names
 
 
 def create_subjourney(
@@ -378,11 +440,23 @@ def create_subjourney(
     project_id: str,
     parent_step_id: str,
     subjourney_data: Dict[str, Any],
-    attribute_map: Dict[str, str]
+    attribute_map: Dict[str, str],
+    parent_phases_data: List[Dict[str, Any]],
+    parent_step_map: Dict[str, str],
+    parent_is_subjourney: bool,
+    parent_step_name: str
 ) -> Optional[str]:
     """Create a subjourney linked to a parent step."""
     print_data(f"Creating subjourney: {subjourney_data.get('name')}")
     
+    # Compute continue_step_id for this subjourney relative to its parent journey
+    continue_step_id = compute_continue_step_id_from_mock(
+        parent_step_name,
+        parent_phases_data,
+        parent_step_map,
+        parent_is_subjourney,
+    )
+
     # Create the subjourney journey
     subjourney_id = create_journey(
         supabase,
@@ -390,7 +464,8 @@ def create_subjourney(
         project_id,
         subjourney_data,
         is_subjourney=True,
-        parent_step_id=parent_step_id
+        parent_step_id=parent_step_id,
+        continue_step_id=continue_step_id,
     )
     
     if not subjourney_id:
@@ -402,7 +477,7 @@ def create_subjourney(
     phase_map = create_phases(supabase, team_id, subjourney_id, phases_data)
     
     # Create steps for subjourney and collect nested subjourney info
-    step_map, nested_subjourney_info = create_steps(
+    step_map, nested_subjourney_info, ordered_step_names = create_steps(
         supabase,
         team_id,
         phase_map,
@@ -423,7 +498,11 @@ def create_subjourney(
             project_id,
             nested_subj_info["step_id"],
             nested_subj_info["subjourney_data"],
-            attribute_map
+            attribute_map,
+            phases_data,
+            step_map,
+            parent_is_subjourney=True,
+            parent_step_name=step_name,
         )
         if nested_subjourney_id:
             nested_count += 1
@@ -473,7 +552,7 @@ def process_journey(
     stats["phases"] = len(phase_map)
     
     # Create steps and collect subjourney info
-    step_map, subjourney_info = create_steps(
+    step_map, subjourney_info, ordered_step_names = create_steps(
         supabase,
         team_id,
         phase_map,
@@ -494,7 +573,11 @@ def process_journey(
             project_id,
             subj_info["step_id"],
             subj_info["subjourney_data"],
-            attribute_map
+            attribute_map,
+            phases_data,
+            step_map,
+            parent_is_subjourney=is_subjourney,
+            parent_step_name=step_name,
         )
         if subjourney_id:
             stats["subjourneys"] += 1

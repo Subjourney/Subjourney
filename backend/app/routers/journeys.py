@@ -10,12 +10,76 @@ from datetime import datetime
 router = APIRouter(prefix="/journeys", tags=["journeys"])
 
 
+def _compute_continue_step_id_for_subjourney(
+    subjourney: Dict[str, Any],
+    parent_journey: Dict[str, Any],
+    parent_phases: List[Dict[str, Any]],
+    parent_steps: List[Dict[str, Any]],
+) -> Optional[str]:
+    """
+    Compute the default continuation step for a subjourney based on the current
+    ordering of phases and steps in its parent journey.
+
+    Rules:
+    - If subjourney['continue_step_id'] is already set, respect it (handled by caller).
+    - Otherwise:
+      1) Default to the next sequential step after parent_step_id in the parent journey.
+      2) If parent_step_id is the last step AND the parent journey is itself a subjourney,
+         "return" to that same parent_step_id (loop back within the base/parent subjourney).
+      3) If no valid continuation can be determined, return None.
+
+    This is intentionally computed at read-time so that it stays consistent when
+    phases/steps are reordered; we don't persist the derived value back to the DB.
+    """
+    parent_step_id = subjourney.get("parent_step_id")
+    if not parent_step_id:
+        return None
+
+    # Build ordered list of all steps in the parent journey:
+    # sort phases by sequence_order, then steps within each phase by sequence_order.
+    sorted_phases = sorted(parent_phases, key=lambda p: p.get("sequence_order", 0))
+    all_steps_sorted: List[Dict[str, Any]] = []
+
+    for phase in sorted_phases:
+        phase_id = phase.get("id")
+        if not phase_id:
+            continue
+        phase_steps = [s for s in parent_steps if s.get("phase_id") == phase_id]
+        phase_steps_sorted = sorted(phase_steps, key=lambda s: s.get("sequence_order", 0))
+        all_steps_sorted.extend(phase_steps_sorted)
+
+    # Find index of the parent step within the ordered list
+    parent_step_index: Optional[int] = None
+    for idx, step in enumerate(all_steps_sorted):
+        if step.get("id") == parent_step_id:
+            parent_step_index = idx
+            break
+
+    if parent_step_index is None:
+        return None
+
+    # Case 1: There's a next step in the parent journey – continue there
+    if parent_step_index < len(all_steps_sorted) - 1:
+        next_step = all_steps_sorted[parent_step_index + 1]
+        next_step_id = next_step.get("id")
+        return str(next_step_id) if next_step_id else None
+
+    # Case 2: Parent step is last AND parent journey is itself a subjourney.
+    # Loop back to the parent step within the base/parent subjourney.
+    if parent_journey.get("is_subjourney"):
+        return str(parent_step_id)
+
+    # No robust default continuation can be derived in this context
+    return None
+
+
 class JourneyCreate(BaseModel):
     project_id: str
     name: str
     description: Optional[str] = None
     is_subjourney: bool = False
     parent_step_id: Optional[str] = None
+    continue_step_id: Optional[str] = None
 
 
 class JourneyResponse(BaseModel):
@@ -25,6 +89,7 @@ class JourneyResponse(BaseModel):
     description: Optional[str] = None
     is_subjourney: bool = False
     parent_step_id: Optional[str] = None
+    continue_step_id: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -78,6 +143,7 @@ async def create_journey(
                     "description": journey_data.description,
                     "is_subjourney": journey_data.is_subjourney,
                     "parent_step_id": journey_data.parent_step_id,
+                    "continue_step_id": journey_data.continue_step_id,
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat(),
                 }
@@ -270,7 +336,7 @@ async def get_journey_structure(
         
         # Get subjourneys if requested
         # Subjourneys are journeys where parent_step_id matches any step in this journey
-        subjourneys = []
+        subjourneys: List[Dict[str, Any]] = []
         if include_subjourneys and step_ids:
             subjourneys_result = (
                 supabase.table("journeys")
@@ -297,7 +363,7 @@ async def get_journey_structure(
                 
                 # Get steps for subjourney phases
                 subj_phase_ids = [phase["id"] for phase in subj_phases]
-                subj_steps = []
+                subj_steps: List[Dict[str, Any]] = []
                 if subj_phase_ids:
                     subj_steps_result = (
                         supabase.table("steps")
@@ -322,12 +388,24 @@ async def get_journey_structure(
                     subj_cards = subj_cards_result.data or []
                 
                 # Build subjourney with full structure
-                subjourney_with_structure = {
+                subjourney_with_structure: Dict[str, Any] = {
                     **subjourney,
                     "allPhases": subj_phases,
                     "allSteps": subj_steps,
                     "allCards": subj_cards,
                 }
+
+                # If continue_step_id is not explicitly set on the subjourney, derive a robust default
+                if not subjourney_with_structure.get("continue_step_id"):
+                    derived_continue_step_id = _compute_continue_step_id_for_subjourney(
+                        subjourney_with_structure,
+                        journey,
+                        phases,
+                        all_steps,
+                    )
+                    if derived_continue_step_id:
+                        subjourney_with_structure["continue_step_id"] = derived_continue_step_id
+
                 subjourneys.append(subjourney_with_structure)
         
         # Build response structure

@@ -43,6 +43,7 @@ export interface Journey extends TeamScopedEntity {
   summary?: string;
   is_subjourney: boolean;
   parent_step_id?: EntityId; // For subjourneys - references the parent step
+  continue_step_id?: EntityId; // Optional explicit continuation step when this journey finishes
   
   // Denormalized fields for UI (populated by API)
   allPhases?: Phase[];

@@ -1,6 +1,6 @@
 """Teams router."""
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from ..auth import get_current_user
 from ..database import get_supabase_admin
@@ -160,3 +160,90 @@ async def get_team(team_id: str, current_user: dict = Depends(get_current_user))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get team: {str(e)}")
 
+
+@router.get("/{team_id}/attributes")
+async def get_team_attributes(
+    team_id: str,
+    project_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get all attributes for a team, optionally filtered by project."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+        # Verify team membership
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        query = supabase.table("attributes").select("*").eq("team_id", team_id)
+        if project_id:
+            query = query.eq("project_id", project_id)
+        result = query.order("created_at", desc=True).execute()
+        return result.data or []
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get attributes: {str(e)}")
+
+
+class TeamAttributeCreate(BaseModel):
+    name: str
+    type: str
+    description: Optional[str] = None
+    allowed_values: Optional[dict] = None
+    project_id: Optional[str] = None
+
+
+@router.post("/{team_id}/attributes")
+async def create_team_attribute(
+    team_id: str,
+    attribute_data: TeamAttributeCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a new attribute definition for a team (optionally project-scoped)."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+        # Verify team membership
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        payload = {
+            "id": str(uuid.uuid4()),
+            "team_id": team_id,
+            "project_id": attribute_data.project_id,
+            "name": attribute_data.name,
+            "type": attribute_data.type,
+            "description": attribute_data.description,
+            "allowed_values": attribute_data.allowed_values or None,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        result = supabase.table("attributes").insert(payload).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create attribute")
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create attribute: {str(e)}")

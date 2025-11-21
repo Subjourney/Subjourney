@@ -65,6 +65,7 @@ export function JourneyOverviewNode(props: NodeProps) {
         width: 'fit-content',
         height: 'auto',
         minWidth: '300px',
+        maxWidth: '300px',
         background: 'var(--surface-2)',
         border: 'var(--border-default)',
         borderRadius: 'var(--radius-lg)',
@@ -194,6 +195,9 @@ export function JourneyOverviewNode(props: NodeProps) {
                         fontWeight: 'var(--font-weight-regular)',
                         color: hoveredPhase === phase.id ? phase.color || '#3B82F6' : 'var(--color-text-tertiary)',
                         flex: 1,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {phase.name}
@@ -319,6 +323,20 @@ export function JourneyOverviewNode(props: NodeProps) {
                             }}
                           />
                         )}
+                        {/* Bottom handle for connecting to subjourneys */}
+                        <Handle
+                          type="source"
+                          position={Position.Bottom}
+                          id={`step-${step.id}-bottom`}
+                          style={{
+                            width: '0px',
+                            height: '0px',
+                            background: 'transparent',
+                            bottom: '0px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                          }}
+                        />
                       </div>
                     );
                   })}

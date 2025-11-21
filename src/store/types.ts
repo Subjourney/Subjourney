@@ -38,6 +38,7 @@ export interface UIState {
   isServiceBlueprintOpen: boolean;
   draggedBlueprintItem: unknown | null;
   isCenterWhenClicked: boolean;
+  newlyAddedSteps: Set<EntityId>; // Track steps that were just added for animation
 }
 
 /**
@@ -50,6 +51,23 @@ export interface DataState {
   cards: Card[];
   attributes: Attribute[];
   flows: Flow[];
+  // Map of stepId -> attributes applied to that step (instances)
+  stepAttributes: Record<EntityId, Attribute[]>;
+}
+
+// Attribute instance optimistic actions and selectors
+export interface AttributeInstanceActions {
+  getAttributesForStep: (stepId: EntityId) => Attribute[];
+  loadStepAttributesForJourney: (journey: Journey) => Promise<void>;
+  addStepAttributeOptimistic: (stepId: EntityId, attribute: Attribute) => Promise<void>;
+  removeStepAttributeOptimistic: (stepId: EntityId, index: number) => Promise<void>;
+  changeStepAttributeOptimistic: (stepId: EntityId, index: number, attribute: Attribute) => Promise<void>;
+  reorderStepAttributesOptimistic: (stepId: EntityId, oldIndex: number, newIndex: number) => void;
+}
+
+// Step optimistic actions
+export interface StepActions {
+  addStepToRightOptimistic: (rightOfStepId: EntityId) => Promise<void>;
 }
 
 /**

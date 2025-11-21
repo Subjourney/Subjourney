@@ -3,7 +3,7 @@
  * Main React Flow canvas for rendering journeys with Dagre layout
  */
 
-import { useCallback, useEffect, useMemo, memo, useState } from 'react';
+import { useCallback, useEffect, useMemo, memo, useState, useRef } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -21,10 +21,11 @@ import { JourneyOverviewNode } from './JourneyOverviewNode';
 import { StepToSubjourneyEdge } from './StepToSubjourneyEdge';
 import { useAppStore } from '../../store';
 import { useSelection } from '../../store';
-import { journeysApi } from '../../api';
+import { journeysApi, attributesApi } from '../../api';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Journey } from '../../types';
+import { useRealtimeAttributes } from '../../hooks/useRealtimeAttributes';
 
 const nodeTypes = {
   'journey-node': memo(JourneyNode),
@@ -47,10 +48,15 @@ function JourneyCanvasInner({
   journeyId: string;
   backgroundDotColor?: string;
 }) {
-  const { currentJourney, setCurrentJourney } = useAppStore();
+  // Realtime subscriptions for attributes/step_attributes
+  useRealtimeAttributes();
+  const { currentJourney, setCurrentJourney, loadStepAttributesForJourney, setAttributes } = useAppStore();
   const { clearSelection } = useSelection();
   const { fitView } = useReactFlow();
   const [parentJourney, setParentJourney] = useState<Journey | null>(null);
+  const [isFittingView, setIsFittingView] = useState(true);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+  const fitHideTimerRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const { teamSlug, projectId } = useParams<{
     teamSlug: string;
@@ -74,6 +80,26 @@ function JourneyCanvasInner({
         .getJourney(journeyId, true)
         .then(async (journey) => {
           setCurrentJourney(journey);
+          
+          // Load all attributes for the team/project (for selector)
+          if (journey.team_id) {
+            try {
+              const allAttributes = await attributesApi.getAttributes(
+                String(journey.team_id),
+                projectId
+              );
+              setAttributes(allAttributes);
+            } catch (error) {
+              console.error('Failed to load attributes:', error);
+            }
+          }
+
+          // Load step attributes for all steps in the journey
+          try {
+            await loadStepAttributesForJourney(journey);
+          } catch (error) {
+            console.error('Failed to load step attributes:', error);
+          }
           
           // If this is a subjourney, fetch the parent journey
           if (journey.is_subjourney && journey.parent_step_id) {
@@ -125,7 +151,7 @@ function JourneyCanvasInner({
       setCurrentJourney(null);
       setParentJourney(null);
     };
-  }, [journeyId, setCurrentJourney]);
+  }, [journeyId, setCurrentJourney, loadStepAttributesForJourney, setAttributes, projectId]);
 
   // Convert journey data to React Flow nodes and edges
   const { nodes, edges } = useMemo(() => {
@@ -255,7 +281,6 @@ function JourneyCanvasInner({
             });
 
             // Create edge from journey node's right handle to next step's left target handle
-            const nextPhaseColor = nextPhase.color || '#3B82F6';
             flowEdges.push({
               id: `edge-${currentJourney.id}-next-${nextStep.id}`,
               source: currentJourney.id,
@@ -264,12 +289,13 @@ function JourneyCanvasInner({
               targetHandle: `step-${nextStep.id}-left-target`, // Left target handle of the next step
               type: 'step-to-subjourney',
               style: {
-                stroke: nextPhaseColor,
+                stroke: 'var(--color-connector-dashed)',
                 strokeWidth: 2,
+                strokeDasharray: '5,5',
               },
               markerEnd: {
                 type: MarkerType.ArrowClosed,
-                color: nextPhaseColor,
+                color: 'var(--color-connector-dashed)',
               },
             });
           }
@@ -285,43 +311,81 @@ function JourneyCanvasInner({
       position: { x: 0, y: 0 }, // Will be positioned by Dagre
     });
 
-    // Create nodes for subjourneys (as journey overview nodes)
-    if (currentJourney.subjourneys) {
+    // Subjourney nodes underneath the journey node (one for each subjourney, unfiltered)
+    if (currentJourney.subjourneys && currentJourney.subjourneys.length > 0) {
+      // Build a map of steps that have subjourneys
+      const stepToSubjourneys = new Map<string, typeof currentJourney.subjourneys>();
+      const allPhases = currentJourney.allPhases || [];
+      const stepToPhase = new Map<string, typeof allPhases[0]>();
+      
       currentJourney.subjourneys.forEach((subjourney) => {
-        // Prepare phases and steps for JourneyOverviewNode
-        const subjourneyPhases = subjourney.allPhases || [];
-        const subjourneySteps = subjourney.allSteps || [];
+        if (subjourney.parent_step_id) {
+          if (!stepToSubjourneys.has(subjourney.parent_step_id)) {
+            stepToSubjourneys.set(subjourney.parent_step_id, []);
+          }
+          stepToSubjourneys.get(subjourney.parent_step_id)!.push(subjourney);
+          
+          // Find the phase for this step
+          if (!stepToPhase.has(subjourney.parent_step_id)) {
+            const allPhases = currentJourney.allPhases || [];
+            const allSteps = currentJourney.allSteps || [];
+            const step = allSteps.find(s => s.id === subjourney.parent_step_id);
+            if (step) {
+              const phase = allPhases.find(p => p.id === step.phase_id);
+              if (phase) {
+                stepToPhase.set(subjourney.parent_step_id, phase);
+              }
+            }
+          }
+        }
+      });
+
+      currentJourney.subjourneys.forEach((subjourney) => {
+        const subPhases = subjourney.allPhases || [];
+        const subSteps = subjourney.allSteps || [];
+        const subHeaderHeight = 40;
+        const subPhaseHeight = subPhases.length * 40;
+        const subStepHeight = subSteps.length * 40;
+        const subCalculatedHeight = subHeaderHeight + subPhaseHeight + subStepHeight;
 
         flowNodes.push({
-          id: subjourney.id,
+          id: `subjourneyNode-${subjourney.id}`,
           type: 'journey-overview-node',
           data: {
             journey: subjourney,
-            phases: subjourneyPhases,
-            steps: subjourneySteps,
+            phases: subPhases,
+            steps: subSteps,
             onJourneyClick: () => {
               if (teamSlug && projectId) {
                 navigate(`/${teamSlug}/project/${projectId}/journey/${subjourney.id}`);
               }
             },
           },
-          position: { x: 0, y: 0 }, // Will be positioned by Dagre
-          width: 300, // Default width, will be measured
-          height: 250, // Default height, will be measured
+          position: { x: 0, y: 0 }, // Will be positioned manually
+          width: 300,
+          height: subCalculatedHeight,
         });
 
-        // Create edge from parent step to subjourney
-        // The edge connects from the step handle (inside the journey node) to the subjourney's top handle
+        // Connect from parent step's bottom handle to subjourney's top handle
         if (subjourney.parent_step_id) {
+          const parentStepId = subjourney.parent_step_id;
+          const phase = stepToPhase.get(parentStepId);
+          const phaseColor = phase?.color || '#3B82F6';
+          
           flowEdges.push({
-            id: `edge-${subjourney.parent_step_id}-${subjourney.id}`,
+            id: `edge-step-${parentStepId}-to-subjourney-${subjourney.id}`,
             source: currentJourney.id,
-            sourceHandle: `step-${subjourney.parent_step_id}`,
-            target: subjourney.id,
-            targetHandle: `journey-${subjourney.id}-top-subjourney`, // Top handle for subjourney connections in journey canvas
-            type: 'default',
+            sourceHandle: `step-${parentStepId}`, // Handle from StepComponent (position Bottom)
+            target: `subjourneyNode-${subjourney.id}`,
+            targetHandle: `journey-${subjourney.id}-top-subjourney`,
+            type: 'step-to-subjourney',
             style: {
+              stroke: phaseColor,
               strokeWidth: 2,
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: phaseColor,
             },
           });
         }
@@ -330,47 +394,48 @@ function JourneyCanvasInner({
 
     // Apply Dagre layout
     const layouted = applyDagreLayout(flowNodes, flowEdges);
-    
+
+    // Helper to read measured size via data attributes (zoom-compensated)
+    // For filtered nodes, prefer the node's height prop (calculated) over measured sizes
+    const getMeasuredSize = (node: Node, nodeId: string, fallbackWidth: number, fallbackHeight: number) => {
+      let width = node.width || fallbackWidth;
+      let height = node.height || fallbackHeight;
+      
+      // For filtered nodes (parent, next step, subjourney nodes), use the calculated height from node prop
+      // Only use measured size if node height is not set (fallback case)
+      if (nodeId.startsWith('parent-') || nodeId.startsWith('next-') || nodeId.startsWith('subjourneyNode-')) {
+        // Prefer node's calculated height, only measure if not set
+        if (!node.height) {
+          const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
+          if (el) {
+            const dw = parseInt(el.getAttribute('data-width') || '0', 10);
+            const dh = parseInt(el.getAttribute('data-height') || '0', 10);
+            if (dw > 0) width = dw;
+            if (dh > 0) height = dh;
+          }
+        }
+      } else {
+        // For journey node, prefer measured size (it uses updateNodeInternals)
+        const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
+        if (el) {
+          const dw = parseInt(el.getAttribute('data-width') || '0', 10);
+          const dh = parseInt(el.getAttribute('data-height') || '0', 10);
+          if (dw > 0) width = dw;
+          if (dh > 0) height = dh;
+        }
+      }
+      return { width, height };
+    };
+
+    const journeyNode = layouted.nodes.find(n => n.id === currentJourney.id);
+
     // Position parent journey overview node to the left of the main journey node
     // and next step node to the right of the main journey node, using measured sizes
-    if (currentJourney.is_subjourney && parentJourney) {
+    if (currentJourney.is_subjourney && parentJourney && journeyNode) {
       const parentNodeId = `parent-${parentJourney.id}`;
       const parentNode = layouted.nodes.find(n => n.id === parentNodeId);
-      const journeyNode = layouted.nodes.find(n => n.id === currentJourney.id);
       
-      if (parentNode && journeyNode) {
-        // Helper to read measured size via data attributes (zoom-compensated)
-        // For filtered nodes, prefer the node's height prop (calculated) over measured sizes
-        const getMeasuredSize = (node: Node, nodeId: string, fallbackWidth: number, fallbackHeight: number) => {
-          let width = node.width || fallbackWidth;
-          let height = node.height || fallbackHeight;
-          
-          // For filtered nodes (parent and next step), use the calculated height from node prop
-          // Only use measured size if node height is not set (fallback case)
-          if (nodeId.startsWith('parent-') || nodeId.startsWith('next-')) {
-            // Prefer node's calculated height, only measure if not set
-            if (!node.height) {
-              const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
-              if (el) {
-                const dw = parseInt(el.getAttribute('data-width') || '0', 10);
-                const dh = parseInt(el.getAttribute('data-height') || '0', 10);
-                if (dw > 0) width = dw;
-                if (dh > 0) height = dh;
-              }
-            }
-          } else {
-            // For journey node, prefer measured size (it uses updateNodeInternals)
-            const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
-            if (el) {
-              const dw = parseInt(el.getAttribute('data-width') || '0', 10);
-              const dh = parseInt(el.getAttribute('data-height') || '0', 10);
-              if (dw > 0) width = dw;
-              if (dh > 0) height = dh;
-            }
-          }
-          return { width, height };
-        };
-
+      if (parentNode) {
         // Get sizes (for filtered nodes, prefer calculated height from node prop)
         const journeySize = getMeasuredSize(journeyNode, String(journeyNode.id), journeyNode.width || 400, journeyNode.height || 300);
         const parentSize = getMeasuredSize(parentNode, String(parentNode.id), parentNode.width || 300, parentNode.height || 250);
@@ -419,11 +484,57 @@ function JourneyCanvasInner({
         }
       }
     }
+
+    // Position subjourney nodes (children) in a centered row underneath the journey node
+    // Use fixed widths so layout is stable across navigations and does not depend on DOM timing
+    if (journeyNode && currentJourney.subjourneys && currentJourney.subjourneys.length > 0) {
+      const subjourneys = currentJourney.subjourneys;
+      const subNodeWidth = 300; // matches width used when creating subjourney nodes
+
+      if (subjourneys.length > 0) {
+        const verticalGap = 100;
+        const subHorizontalGap = 40;
+        const totalWidth =
+          subjourneys.length * subNodeWidth +
+          subHorizontalGap * (subjourneys.length - 1);
+
+        const journeySize = getMeasuredSize(
+          journeyNode,
+          String(journeyNode.id),
+          journeyNode.width || 400,
+          journeyNode.height || 300
+        );
+        const journeyCenterX = (journeyNode.position?.x || 0) + journeySize.width / 2;
+        let currentX = journeyCenterX - totalWidth / 2;
+        const baseY = (journeyNode.position?.y || 0) + journeySize.height + verticalGap;
+
+        subjourneys.forEach((subjourney) => {
+          const subNodeId = `subjourneyNode-${subjourney.id}`;
+          const subNode = layouted.nodes.find((n) => n.id === subNodeId);
+          if (subNode) {
+            subNode.position = {
+              x: currentX,
+              y: baseY,
+            };
+            currentX += subNodeWidth + subHorizontalGap;
+          }
+        });
+      }
+    }
     
     return layouted;
   }, [currentJourney, parentJourney]);
 
-  // Fit view after JourneyNode mounts and measured size is available (only fit to JourneyNode, not PortalNodes)
+  // Whenever we load a new journey, show the canvas overlay again
+  useEffect(() => {
+    if (currentJourney) {
+      setIsFittingView(true);
+      setIsFadingOut(false);
+    }
+  }, [currentJourney?.id]);
+
+  // Fit view after JourneyNode mounts and measured size is available
+  // Center the entire canvas (all nodes), using JourneyNode measurement as readiness signal
   useEffect(() => {
     if (nodes.length === 0) return;
     
@@ -434,16 +545,18 @@ function JourneyCanvasInner({
     let rafId = 0;
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 12; // ~12 frames (~200ms) fallback
+    const maxAttempts = 60; // ~60 frames (~1s) fallback to ensure measurements are ready
 
     const tryFit = () => {
       if (cancelled) return;
       attempts += 1;
 
       // Only check the JourneyNode measurement (not PortalNodes)
-      const journeyEl = document.querySelector(`[data-journey-node="true"][data-journey-id="${journeyNode.id}"]`) as HTMLElement;
+      const journeyEl = document.querySelector(
+        `[data-journey-node="true"][data-journey-id="${journeyNode.id}"]`
+      ) as HTMLElement | null;
       const isMeasured =
-        !journeyEl ||
+        !!journeyEl &&
         (() => {
           const w = parseInt(journeyEl.getAttribute('data-width') || '0', 10);
           const h = parseInt(journeyEl.getAttribute('data-height') || '0', 10);
@@ -451,12 +564,27 @@ function JourneyCanvasInner({
         })();
 
       if (isMeasured || attempts >= maxAttempts) {
-        // Only fit to the JourneyNode, exclude PortalNodes
-        fitView({ 
-          padding: 0.25, 
+        // Fit view to all nodes so the entire JourneyCanvas graph is centered
+        fitView({
+          padding: 0.25,
           includeHiddenNodes: true,
-          nodes: [journeyNode] // Only fit to the JourneyNode
         });
+
+        // Delay before starting fade-out, then fade out, then remove from DOM
+        if (!cancelled) {
+          if (fitHideTimerRef.current) {
+            window.clearTimeout(fitHideTimerRef.current);
+          }
+          // Wait 100ms before starting fade-out
+          fitHideTimerRef.current = window.setTimeout(() => {
+            setIsFadingOut(true);
+            // After fade transition completes (100ms), remove from DOM
+            fitHideTimerRef.current = window.setTimeout(() => {
+              setIsFittingView(false);
+              setIsFadingOut(false);
+            }, 200);
+          }, 200);
+        }
         return;
       }
       rafId = requestAnimationFrame(tryFit);
@@ -466,6 +594,9 @@ function JourneyCanvasInner({
     return () => {
       cancelled = true;
       if (rafId) cancelAnimationFrame(rafId);
+      if (fitHideTimerRef.current) {
+        window.clearTimeout(fitHideTimerRef.current);
+      }
     };
   }, [nodes, fitView]);
 
@@ -494,29 +625,47 @@ function JourneyCanvasInner({
   }
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onPaneClick={onPaneClick}
-      fitView
-      fitViewOptions={{ padding: 0.25, includeHiddenNodes: true }}
-      proOptions={proOptions}
-      attributionPosition="bottom-left"
-      elevateEdgesOnSelect={true}
-      elevateNodesOnSelect={false}
-      minZoom={0.1}
-      maxZoom={1}
-      panOnScroll={true}
-      selectionOnDrag={true}
-      panOnDrag={false}
-    >
-      <Background color={backgroundDotColor || defaultDotColor} />
-      <Controls />
-    </ReactFlow>
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onPaneClick={onPaneClick}
+        proOptions={proOptions}
+        attributionPosition="bottom-left"
+        elevateEdgesOnSelect={true}
+        elevateNodesOnSelect={false}
+        minZoom={0.1}
+        maxZoom={2}
+        panOnScroll={true}
+        selectionOnDrag={true}
+        panOnDrag={[1]}
+      >
+        <Background color={backgroundDotColor || defaultDotColor} />
+        <Controls />
+      </ReactFlow>
+
+      {isFittingView && (
+        <div
+          className={isFadingOut ? 'canvas-overlay-fade-out' : 'canvas-overlay'}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'var(--surface-1)',
+            pointerEvents: 'none',
+            zIndex: 10,
+          }}
+        >
+          <div className="canvas-spinner" />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -531,9 +680,9 @@ export function JourneyCanvas({
   backgroundDotColor?: string;
 }) {
   return (
-    <ReactFlowProvider>
+    <ReactFlowProvider key={journeyId}>
       <div style={{ width: '100%', height: '100vh' }}>
-        <JourneyCanvasInner journeyId={journeyId} backgroundDotColor={backgroundDotColor} />
+        <JourneyCanvasInner key={journeyId} journeyId={journeyId} backgroundDotColor={backgroundDotColor} />
       </div>
     </ReactFlowProvider>
   );
