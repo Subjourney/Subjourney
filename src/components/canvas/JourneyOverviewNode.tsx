@@ -289,6 +289,20 @@ export function JourneyOverviewNode(props: NodeProps) {
                             transform: 'translateY(-50%)',
                           }}
                         />
+                        {/* Left target handle for receiving connections from journey nodes */}
+                        <Handle
+                          type="target"
+                          position={Position.Left}
+                          id={`step-${step.id}-left-target`}
+                          style={{
+                            width: '0px',
+                            height: '0px',
+                            background: 'transparent',
+                            left: '0px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                          }}
+                        />
                         {/* Left handle for final step in subjourneys to connect back to parent */}
                         {journey.is_subjourney && isLastStepInLastPhase && (
                           <Handle

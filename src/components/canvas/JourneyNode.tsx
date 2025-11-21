@@ -64,20 +64,38 @@ export function JourneyNode(props: NodeProps) {
       data-width={size.width}
       data-height={size.height}
     >
-      {/* Target handle at top for parent journey connection (when this is a subjourney) */}
+      {/* Target handle at left for parent journey connection (when this is a subjourney) */}
       {journey.is_subjourney && (
         <Handle
-          id="parent-top"
+          id="parent-left"
           type="target"
-          position={Position.Top}
+          position={Position.Left}
           className="journey-handle-parent"
           style={{
             opacity: 0,
             width: '1px',
             height: '1px',
-            top: '-2px',
-            left: '50%',
-            transform: 'translateX(-50%)',
+            left: '-2px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}
+        />
+      )}
+
+      {/* Source handle at right for next step connection (when this is a subjourney) */}
+      {journey.is_subjourney && (
+        <Handle
+          id="next-step-right"
+          type="source"
+          position={Position.Right}
+          className="journey-handle-next-step"
+          style={{
+            opacity: 0,
+            width: '1px',
+            height: '1px',
+            right: '-2px',
+            top: '50%',
+            transform: 'translateY(-50%)',
           }}
         />
       )}

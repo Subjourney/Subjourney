@@ -12,6 +12,8 @@ export function StepToSubjourneyEdge(props: EdgeProps) {
     sourceY,
     targetX,
     targetY,
+    sourcePosition = Position.Right,
+    targetPosition = Position.Left,
     style,
     markerEnd,
     markerStart,
@@ -20,10 +22,10 @@ export function StepToSubjourneyEdge(props: EdgeProps) {
   const [path] = getBezierPath({
     sourceX,
     sourceY,
-    sourcePosition: Position.Right,
+    sourcePosition,
     targetX,
     targetY,
-    targetPosition: Position.Left,
+    targetPosition,
   });
 
   return (

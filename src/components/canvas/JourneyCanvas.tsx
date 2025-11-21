@@ -10,14 +10,15 @@ import {
   Background,
   Controls,
   useReactFlow,
+  MarkerType,
   type Node,
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
 import { applyDagreLayout } from './layout';
 import { JourneyNode } from './JourneyNode';
-import { PortalNode } from './PortalNode';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
+import { StepToSubjourneyEdge } from './StepToSubjourneyEdge';
 import { useAppStore } from '../../store';
 import { useSelection } from '../../store';
 import { journeysApi } from '../../api';
@@ -27,8 +28,11 @@ import type { Journey } from '../../types';
 
 const nodeTypes = {
   'journey-node': memo(JourneyNode),
-  'portal-node': memo(PortalNode),
   'journey-overview-node': memo(JourneyOverviewNode),
+};
+
+const edgeTypes = {
+  'step-to-subjourney': memo(StepToSubjourneyEdge),
 };
 
 const proOptions = { hideAttribution: true };
@@ -134,17 +138,43 @@ function JourneyCanvasInner({
 
     // If viewing a subjourney, create journey overview node for parent journey
     if (currentJourney.is_subjourney && parentJourney) {
-      // Prepare phases and steps for JourneyOverviewNode
+      // Filter to show only the parent step and its phase
       const parentPhases = parentJourney.allPhases || [];
       const parentSteps = parentJourney.allSteps || [];
+      
+      // Find the parent step
+      const parentStep = parentSteps.find(step => step.id === currentJourney.parent_step_id);
+      
+      // Filter phases and steps to only show the parent step and its phase
+      let filteredPhases: typeof parentPhases = [];
+      let filteredSteps: typeof parentSteps = [];
+      let parentPhase: typeof parentPhases[0] | undefined = undefined;
+      
+      if (parentStep) {
+        // Find the phase that contains the parent step
+        parentPhase = parentPhases.find(phase => phase.id === parentStep.phase_id);
+        
+        if (parentPhase) {
+          // Only include the parent phase
+          filteredPhases = [parentPhase];
+          // Only include the parent step
+          filteredSteps = [parentStep];
+        }
+      }
+
+      // Calculate height based on filtered phases and steps
+      const headerHeight = 40;
+      const phaseHeight = filteredPhases.length * 40;
+      const stepHeight = filteredSteps.length * 40;
+      const calculatedHeight = headerHeight + phaseHeight + stepHeight;
 
       flowNodes.push({
         id: `parent-${parentJourney.id}`,
         type: 'journey-overview-node',
         data: {
           journey: parentJourney,
-          phases: parentPhases,
-          steps: parentSteps,
+          phases: filteredPhases,
+          steps: filteredSteps,
           onJourneyClick: () => {
             if (teamSlug && projectId) {
               navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}`);
@@ -152,23 +182,99 @@ function JourneyCanvasInner({
           },
         },
         position: { x: 0, y: 0 }, // Will be positioned by Dagre
-        width: 300, // Default width, will be measured
-        height: 250, // Default height, will be measured
+        width: 300,
+        height: calculatedHeight,
       });
 
-      // Create edge from parent journey overview to current journey's top handle
-      // Use the bottom handle of the parent journey overview node
-      flowEdges.push({
-        id: `edge-parent-${parentJourney.id}-${currentJourney.id}`,
-        source: `parent-${parentJourney.id}`,
-        sourceHandle: `journey-${parentJourney.id}-bottom-subjourney`, // Bottom handle available for all overview nodes
-        target: currentJourney.id,
-        targetHandle: 'parent-top',
-        type: 'default',
-        style: {
-          strokeWidth: 2,
-        },
-      });
+      // Create edge from parent step's right handle to current journey's left handle
+      // Connect from the step that this subjourney belongs to
+      if (currentJourney.parent_step_id && parentStep && parentPhase) {
+        // Get the phase color for the parent step
+        const phaseColor = parentPhase.color || '#3B82F6';
+        
+        flowEdges.push({
+          id: `edge-parent-${parentJourney.id}-${currentJourney.id}`,
+          source: `parent-${parentJourney.id}`,
+          sourceHandle: `journey-${parentJourney.id}-bottom-subjourney`, // Bottom handle of the parent journey overview node
+          target: currentJourney.id,
+          targetHandle: 'top', // Top handle of the journey node
+          type: 'step-to-subjourney',
+          style: {
+            stroke: phaseColor,
+            strokeWidth: 2,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: phaseColor,
+          },
+        });
+
+        // Find the next sequential step after the parent step
+        // Sort all steps by phase sequence_order and step sequence_order
+        const sortedPhases = [...parentPhases].sort((a, b) => a.sequence_order - b.sequence_order);
+        const allStepsSorted: typeof parentSteps = [];
+        sortedPhases.forEach((phase) => {
+          const phaseSteps = parentSteps
+            .filter(step => step.phase_id === phase.id)
+            .sort((a, b) => a.sequence_order - b.sequence_order);
+          allStepsSorted.push(...phaseSteps);
+        });
+
+        // Find the index of the parent step
+        const parentStepIndex = allStepsSorted.findIndex(step => step.id === currentJourney.parent_step_id);
+        
+        // Get the next step if it exists
+        if (parentStepIndex >= 0 && parentStepIndex < allStepsSorted.length - 1) {
+          const nextStep = allStepsSorted[parentStepIndex + 1];
+          const nextPhase = parentPhases.find(phase => phase.id === nextStep.phase_id);
+
+          if (nextPhase) {
+            // Calculate height based on filtered phases and steps (1 phase, 1 step)
+            const headerHeight = 40;
+            const phaseHeight = 1 * 40; // 1 phase
+            const stepHeight = 1 * 40; // 1 step
+            const calculatedNextHeight = headerHeight + phaseHeight + stepHeight;
+
+            // Create journey overview node for the next step
+            flowNodes.push({
+              id: `next-${parentJourney.id}-${nextStep.id}`,
+              type: 'journey-overview-node',
+              data: {
+                journey: parentJourney,
+                phases: [nextPhase],
+                steps: [nextStep],
+                onJourneyClick: () => {
+                  if (teamSlug && projectId) {
+                    navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}`);
+                  }
+                },
+              },
+              position: { x: 0, y: 0 }, // Will be positioned manually
+              width: 300,
+              height: calculatedNextHeight,
+            });
+
+            // Create edge from journey node's right handle to next step's left target handle
+            const nextPhaseColor = nextPhase.color || '#3B82F6';
+            flowEdges.push({
+              id: `edge-${currentJourney.id}-next-${nextStep.id}`,
+              source: currentJourney.id,
+              sourceHandle: 'next-step-right', // Right handle of the journey node
+              target: `next-${parentJourney.id}-${nextStep.id}`,
+              targetHandle: `step-${nextStep.id}-left-target`, // Left target handle of the next step
+              type: 'step-to-subjourney',
+              style: {
+                stroke: nextPhaseColor,
+                strokeWidth: 2,
+              },
+              markerEnd: {
+                type: MarkerType.ArrowClosed,
+                color: nextPhaseColor,
+              },
+            });
+          }
+        }
+      }
     }
 
     // Create node for main journey
@@ -224,6 +330,96 @@ function JourneyCanvasInner({
 
     // Apply Dagre layout
     const layouted = applyDagreLayout(flowNodes, flowEdges);
+    
+    // Position parent journey overview node to the left of the main journey node
+    // and next step node to the right of the main journey node, using measured sizes
+    if (currentJourney.is_subjourney && parentJourney) {
+      const parentNodeId = `parent-${parentJourney.id}`;
+      const parentNode = layouted.nodes.find(n => n.id === parentNodeId);
+      const journeyNode = layouted.nodes.find(n => n.id === currentJourney.id);
+      
+      if (parentNode && journeyNode) {
+        // Helper to read measured size via data attributes (zoom-compensated)
+        // For filtered nodes, prefer the node's height prop (calculated) over measured sizes
+        const getMeasuredSize = (node: Node, nodeId: string, fallbackWidth: number, fallbackHeight: number) => {
+          let width = node.width || fallbackWidth;
+          let height = node.height || fallbackHeight;
+          
+          // For filtered nodes (parent and next step), use the calculated height from node prop
+          // Only use measured size if node height is not set (fallback case)
+          if (nodeId.startsWith('parent-') || nodeId.startsWith('next-')) {
+            // Prefer node's calculated height, only measure if not set
+            if (!node.height) {
+              const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
+              if (el) {
+                const dw = parseInt(el.getAttribute('data-width') || '0', 10);
+                const dh = parseInt(el.getAttribute('data-height') || '0', 10);
+                if (dw > 0) width = dw;
+                if (dh > 0) height = dh;
+              }
+            }
+          } else {
+            // For journey node, prefer measured size (it uses updateNodeInternals)
+            const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
+            if (el) {
+              const dw = parseInt(el.getAttribute('data-width') || '0', 10);
+              const dh = parseInt(el.getAttribute('data-height') || '0', 10);
+              if (dw > 0) width = dw;
+              if (dh > 0) height = dh;
+            }
+          }
+          return { width, height };
+        };
+
+        // Get sizes (for filtered nodes, prefer calculated height from node prop)
+        const journeySize = getMeasuredSize(journeyNode, String(journeyNode.id), journeyNode.width || 400, journeyNode.height || 300);
+        const parentSize = getMeasuredSize(parentNode, String(parentNode.id), parentNode.width || 300, parentNode.height || 250);
+        
+        // Position parent node above journey node with gap
+        const verticalGap = 100;
+        const horizontalGap = 100; // For next step node positioning
+        parentNode.position = {
+          x: (journeyNode.position?.x || 0) + (journeySize.width / 2) - (parentSize.width / 2), // Horizontally center align
+          y: (journeyNode.position?.y || 0) - parentSize.height - verticalGap,
+        };
+
+        // Find and position next step node to the right of journey node
+        const parentSteps = parentJourney.allSteps || [];
+        const parentStep = parentSteps.find(step => step.id === currentJourney.parent_step_id);
+        
+        if (parentStep) {
+          // Sort all steps to find next step
+          const parentPhases = parentJourney.allPhases || [];
+          const sortedPhases = [...parentPhases].sort((a, b) => a.sequence_order - b.sequence_order);
+          const allStepsSorted: typeof parentSteps = [];
+          sortedPhases.forEach((phase) => {
+            const phaseSteps = parentSteps
+              .filter(step => step.phase_id === phase.id)
+              .sort((a, b) => a.sequence_order - b.sequence_order);
+            allStepsSorted.push(...phaseSteps);
+          });
+
+          const parentStepIndex = allStepsSorted.findIndex(step => step.id === currentJourney.parent_step_id);
+          
+          if (parentStepIndex >= 0 && parentStepIndex < allStepsSorted.length - 1) {
+            const nextStep = allStepsSorted[parentStepIndex + 1];
+            const nextNodeId = `next-${parentJourney.id}-${nextStep.id}`;
+            const nextNode = layouted.nodes.find(n => n.id === nextNodeId);
+            
+            if (nextNode) {
+              const nextSize = getMeasuredSize(nextNode, String(nextNode.id), nextNode.width || 300, nextNode.height || 250);
+              
+              // Position next step node to the right of journey node with gap
+              nextNode.position = {
+                x: (journeyNode.position?.x || 0) + journeySize.width + horizontalGap,
+                y: (journeyNode.position?.y || 0) + (journeySize.height / 2) - (nextSize.height / 2), // Vertically center align
+              };
+            }
+          }
+        }
+      }
+    }
+    
     return layouted;
   }, [currentJourney, parentJourney]);
 
@@ -302,6 +498,7 @@ function JourneyCanvasInner({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onPaneClick={onPaneClick}
