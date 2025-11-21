@@ -13,11 +13,12 @@ interface Size {
 
 /**
  * Hook to measure journey node size from actual DOM rendering
- * Reports size changes to React Flow via updateNodeInternals
+ * Reports size changes to React Flow via updateNodeInternals (unless skipUpdateInternals is true)
  */
-export function useJourneySizeMeasurement(nodeId: string) {
+export function useJourneySizeMeasurement(nodeId: string, skipUpdateInternals = false) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<Size>({ width: 400, height: 300 });
+  // Always call the hook (React rules), but conditionally use it
   const updateNodeInternals = useUpdateNodeInternals();
   // Read current zoom from React Flow store (transform = [x, y, zoom])
   const zoom = useStore((s) => (Array.isArray(s.transform) ? s.transform[2] : 1)) || 1;
@@ -70,15 +71,15 @@ export function useJourneySizeMeasurement(nodeId: string) {
     };
   }, [measureSize]);
 
-  // Update React Flow node internals when size changes
+  // Update React Flow node internals when size changes (only if not skipped)
   useEffect(() => {
-    if (size.width > 0 && size.height > 0) {
+    if (!skipUpdateInternals && size.width > 0 && size.height > 0) {
       // Use requestAnimationFrame to batch updates
       requestAnimationFrame(() => {
         updateNodeInternals(nodeId);
       });
     }
-  }, [size.width, size.height, nodeId, updateNodeInternals]);
+  }, [size.width, size.height, nodeId, updateNodeInternals, skipUpdateInternals]);
 
   return {
     containerRef,

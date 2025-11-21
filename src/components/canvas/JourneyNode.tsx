@@ -64,6 +64,24 @@ export function JourneyNode(props: NodeProps) {
       data-width={size.width}
       data-height={size.height}
     >
+      {/* Target handle at top for parent journey connection (when this is a subjourney) */}
+      {journey.is_subjourney && (
+        <Handle
+          id="parent-top"
+          type="target"
+          position={Position.Top}
+          className="journey-handle-parent"
+          style={{
+            opacity: 0,
+            width: '1px',
+            height: '1px',
+            top: '-2px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+          }}
+        />
+      )}
+
       {/* Source handle for subjourney connections */}
       {journey.is_subjourney && (
         <Handle

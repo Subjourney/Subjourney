@@ -3,19 +3,19 @@
  * Main React Flow canvas for rendering journey overview nodes directly
  */
 
-import { useCallback, useEffect, useMemo, memo } from 'react';
+import { useCallback, useMemo, memo } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
   Background,
   Controls,
-  useReactFlow,
   MarkerType,
   type Node,
   type Edge,
   type OnNodesChange,
   type OnEdgesChange,
   type OnConnect,
+  MiniMap,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
@@ -59,7 +59,6 @@ function ProjectCanvasInner({
   backgroundDotColor, // Color for canvas background dots (defaults to CSS variable)
 }: ProjectCanvasInnerProps) {
   const { clearSelection, select } = useSelection();
-  const { fitView } = useReactFlow();
   const navigate = useNavigate();
 
   // Get default background dot color from CSS variable
@@ -179,8 +178,13 @@ function ProjectCanvasInner({
       journeyStepsMap.set(journey.id, allSteps);
     });
 
-    // Get parent journeys list for finding next journey
+    // Get parent journeys list for finding next journey (sorted deterministically by name then id)
     const parentJourneys = journeys.filter((j) => !j.is_subjourney);
+    const parentJourneysSorted = [...parentJourneys].sort((a, b) => {
+      const byName = (a.name || '').localeCompare(b.name || '');
+      if (byName !== 0) return byName;
+      return String(a.id).localeCompare(String(b.id));
+    });
 
     // Create edges from final step of subjourneys to next sequential step in parent journey
     journeys.forEach((subjourney) => {
@@ -222,9 +226,9 @@ function ProjectCanvasInner({
             } 
             // Case 2: Parent step is the last step - connect to first step of next top-level journey
             else {
-              const parentJourneyIndex = parentJourneys.findIndex(j => j.id === parentJourneyId);
-              if (parentJourneyIndex >= 0 && parentJourneyIndex < parentJourneys.length - 1) {
-                const nextJourney = parentJourneys[parentJourneyIndex + 1];
+              const parentJourneyIndex = parentJourneysSorted.findIndex(j => j.id === parentJourneyId);
+              if (parentJourneyIndex >= 0 && parentJourneyIndex < parentJourneysSorted.length - 1) {
+                const nextJourney = parentJourneysSorted[parentJourneyIndex + 1];
                 const nextJourneySteps = journeyStepsMap.get(nextJourney.id) || [];
                 const firstStepOfNextJourney = nextJourneySteps[0];
                 
@@ -256,10 +260,10 @@ function ProjectCanvasInner({
 
     // Create edges connecting top-level journeys in sequence
     // Connect bottom of each journey to top of the next one
-    // (parentJourneys already defined above)
-    for (let i = 0; i < parentJourneys.length - 1; i++) {
-      const currentJourney = parentJourneys[i];
-      const nextJourney = parentJourneys[i + 1];
+    // (use sorted parent journeys for deterministic sequence)
+    for (let i = 0; i < parentJourneysSorted.length - 1; i++) {
+      const currentJourney = parentJourneysSorted[i];
+      const nextJourney = parentJourneysSorted[i + 1];
       flowEdges.push({
         id: `edge-journey-${currentJourney.id}-to-${nextJourney.id}`,
         source: currentJourney.id,
@@ -311,16 +315,16 @@ function ProjectCanvasInner({
     // Use Dagre layout for parent journeys (zoom-compensated rank separation)
     // Create temporary edges between parent journeys for Dagre layout
     const parentJourneyEdges: Edge[] = [];
-    for (let i = 0; i < parentJourneys.length - 1; i++) {
+    for (let i = 0; i < parentJourneysSorted.length - 1; i++) {
       parentJourneyEdges.push({
-        id: `temp-edge-${parentJourneys[i].id}-${parentJourneys[i + 1].id}`,
-        source: parentJourneys[i].id,
-        target: parentJourneys[i + 1].id,
+        id: `temp-edge-${parentJourneysSorted[i].id}-${parentJourneysSorted[i + 1].id}`,
+        source: parentJourneysSorted[i].id,
+        target: parentJourneysSorted[i + 1].id,
       });
     }
 
     // Get parent journey nodes only
-    const parentJourneyNodes = parentJourneys
+    const parentJourneyNodes = parentJourneysSorted
       .map((j) => nodeById.get(j.id))
       .filter((n): n is Node => n !== undefined);
 
@@ -331,6 +335,8 @@ function ProjectCanvasInner({
       rankSep: 260, // Reduced vertical separation (zoom-compensated via data attributes)
       marginX,
       marginY,
+      // For project canvas, rely on node.width/height only for stability
+      preferDomMeasurements: false,
     });
 
     // Update parent node positions from Dagre layout
@@ -341,28 +347,17 @@ function ProjectCanvasInner({
       }
     });
 
-    // Helper function to get measured size from data attributes (zoom-compensated)
-    const getMeasuredSize = (node: Node): { width: number; height: number } => {
-      let width = node.width || 300;
-      let height = node.height || 250;
-      
-      // Try to get measured size from data attributes (zoom-independent)
-      if (node.data && typeof node.id === 'string') {
-        const nodeElement = document.querySelector(`[data-journey-id="${node.id}"]`);
-        if (nodeElement) {
-          const measuredWidth = nodeElement.getAttribute('data-width');
-          const measuredHeight = nodeElement.getAttribute('data-height');
-          if (measuredWidth) width = parseInt(measuredWidth, 10);
-          if (measuredHeight) height = parseInt(measuredHeight, 10);
-        }
-      }
-      
-      return { width, height };
+    // Helper function: get size from node props only (no DOM)
+    const getNodeSize = (node: Node): { width: number; height: number } => {
+      return {
+        width: node.width || 300,
+        height: node.height || 250,
+      };
     };
 
     // Recursive positioning of subjourneys for any parent (supports nested subjourneys)
     const positionSubjourneysRecursive = (parentNode: Node, parentJourneyId: string) => {
-      const parentSize = getMeasuredSize(parentNode);
+      const parentSize = getNodeSize(parentNode);
       const subNodesWithIndex = parentToSubNodes.get(parentJourneyId) || [];
       if (subNodesWithIndex.length === 0) return;
 
@@ -376,7 +371,7 @@ function ProjectCanvasInner({
       const subsTotalHeightForCentering =
         sortedSubNodes.reduce(
           (sum, { node: sn }, idx) => {
-            const subSize = getMeasuredSize(sn);
+            const subSize = getNodeSize(sn);
             return sum + subSize.height + (idx > 0 ? verticalGap : 0);
           },
           0
@@ -390,7 +385,7 @@ function ProjectCanvasInner({
 
       // Place direct children
       sortedSubNodes.forEach(({ node: sn }) => {
-        const subSize = getMeasuredSize(sn);
+        const subSize = getNodeSize(sn);
         sn.position = {
           x: parentRightX + horizontalGap,
           y: subCurrentY,
@@ -403,7 +398,7 @@ function ProjectCanvasInner({
     };
 
     // Position subjourneys for each top-level parent; recursion handles deeper levels
-    parentJourneys.forEach((parent) => {
+    parentJourneysSorted.forEach((parent) => {
       const parentNode = nodeById.get(parent.id);
       if (parentNode) {
         positionSubjourneysRecursive(parentNode, parent.id);
@@ -412,15 +407,6 @@ function ProjectCanvasInner({
 
     return { nodes: flowNodes, edges: flowEdges };
   }, [journeys, journeyPhases, phaseSteps, handleJourneyClick, onPhaseClick, onStepClick]);
-
-  // Fit view when nodes change
-  useEffect(() => {
-    if (nodes.length > 0) {
-      setTimeout(() => {
-        fitView({ padding: 0.2 });
-      }, 100);
-    }
-  }, [nodes.length, fitView]);
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
     // Handle node changes (position updates, etc.)
@@ -469,6 +455,7 @@ function ProjectCanvasInner({
       onPaneClick={onPaneClick}
       onNodeClick={onNodeClick}
       fitView
+      fitViewOptions={{ padding: 0.25, includeHiddenNodes: true }}
       proOptions={proOptions}
       minZoom={0.1}
       maxZoom={2}
@@ -479,6 +466,7 @@ function ProjectCanvasInner({
     >
       <Background color={backgroundDotColor || defaultDotColor} />
       <Controls />
+      <MiniMap></MiniMap>
     </ReactFlow>
   );
 }

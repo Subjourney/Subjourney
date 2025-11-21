@@ -23,7 +23,8 @@ interface JourneyOverviewNodeData {
 export function JourneyOverviewNode(props: NodeProps) {
   const { id, data } = props;
   const nodeId = String(id);
-  const { containerRef, size } = useJourneySizeMeasurement(nodeId);
+  // Skip updateNodeInternals for project canvas - we don't need it since nodes aren't contained
+  const { containerRef, size } = useJourneySizeMeasurement(nodeId, true);
   const [hoveredPhase, setHoveredPhase] = useState<string | null>(null);
   const [hoveredStep, setHoveredStep] = useState<string | null>(null);
   
@@ -313,6 +314,36 @@ export function JourneyOverviewNode(props: NodeProps) {
           </div>
         )}
       </div>
+
+      {/* Top handle for subjourney connections in journey canvas */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        id={`journey-${journey.id}-top-subjourney`}
+        style={{
+          width: '0px',
+          height: '0px',
+          background: 'transparent',
+          top: '0px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+        }}
+      />
+
+      {/* Bottom handle for subjourney chaining in journey canvas */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id={`journey-${journey.id}-bottom-subjourney`}
+        style={{
+          width: '0px',
+          height: '0px',
+          background: 'transparent',
+          bottom: '0px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+        }}
+      />
 
       {/* Top handle for main journey sequence connections */}
       {!journey.is_subjourney && (

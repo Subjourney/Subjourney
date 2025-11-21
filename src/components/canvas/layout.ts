@@ -11,6 +11,11 @@ export interface LayoutOptions {
   rankSep?: number;
   marginX?: number;
   marginY?: number;
+  /**
+   * When true (default), try to read actual DOM-measured sizes via data attributes.
+   * When false, rely solely on node.width/node.height passed in.
+   */
+  preferDomMeasurements?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<LayoutOptions> = {
@@ -19,6 +24,7 @@ const DEFAULT_OPTIONS: Required<LayoutOptions> = {
   rankSep: 100,
   marginX: 50,
   marginY: 50,
+  preferDomMeasurements: true,
 };
 
 /**
@@ -48,7 +54,7 @@ export function applyDagreLayout(
     let height = node.height || 300;
 
     // Prefer zoom-independent sizes from data attributes if available
-    if (node.data) {
+    if (opts.preferDomMeasurements && node.data) {
       // Use a single query with a more specific selector
       const nodeElement = document.querySelector(
         `[data-journey-id="${node.id}"], [data-project-id="${node.id}"]`
@@ -83,7 +89,7 @@ export function applyDagreLayout(
     let nodeHeight = node.height || 300;
     
     // Prefer zoom-independent sizes from data attributes if available
-    if (node.data) {
+    if (opts.preferDomMeasurements && node.data) {
       const nodeElement = document.querySelector(
         `[data-journey-id="${node.id}"], [data-project-id="${node.id}"]`
       );
