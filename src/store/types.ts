@@ -34,6 +34,7 @@ export interface UIState {
   collapsedSubjourneys: Set<EntityId>;
   loadingSteps: Set<EntityId>;
   loadingSubjourneys: Set<EntityId>;
+  isDraggingStep: boolean;
   disableHover: boolean;
   isServiceBlueprintOpen: boolean;
   draggedBlueprintItem: unknown | null;
@@ -67,6 +68,18 @@ export interface AttributeInstanceActions {
 // Step optimistic actions
 export interface StepActions {
   addStepToRightOptimistic: (rightOfStepId: EntityId) => Promise<void>;
+  reorderStepsOptimistic: (phaseId: EntityId, stepIds: EntityId[]) => void;
+  moveStepToPhaseOptimistic: (
+    stepId: EntityId,
+    targetPhaseId: EntityId,
+    beforeStepId?: EntityId | null
+  ) => {
+    sourcePhaseId: EntityId;
+    targetPhaseId: EntityId;
+    sourceOrder: EntityId[];
+    targetOrder: EntityId[];
+    revert: () => void;
+  };
 }
 
 // Phase optimistic actions

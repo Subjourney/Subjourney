@@ -163,9 +163,9 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
   }, [step.id, currentJourney, setSubjourneyLoading, setCurrentJourney]);
 
   const performDeleteStep = useCallback(async () => {
-    if (!step.id || !currentJourney) return;
+    if (!step.id) return;
 
-    // Find the previous step before deletion
+    // Find the previous step before deletion (for selection)
     const phaseSteps = steps
       .filter((s) => s.phase_id === step.phase_id)
       .sort((a, b) => a.sequence_order - b.sequence_order);
@@ -173,22 +173,17 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
     const previousStep = currentIndex > 0 ? phaseSteps[currentIndex - 1] : null;
 
     try {
-      await journeysApi.deleteStep(step.id);
-      // Reload journey to reflect deletion
-      if (currentJourney.id) {
-        const updatedJourney = await journeysApi.getJourney(currentJourney.id, true);
-        setCurrentJourney(updatedJourney);
+      await useAppStore.getState().removeStepOptimistic(step.id);
         // Select the previous step if it exists, otherwise clear selection
         if (previousStep) {
           useAppStore.getState().select('selectedStep', previousStep.id);
         } else {
           useAppStore.getState().select('selectedStep', null);
-        }
       }
     } catch (error) {
       console.error('Failed to delete step:', error);
     }
-  }, [step.id, step.phase_id, currentJourney, steps, setCurrentJourney]);
+  }, [step.id, step.phase_id, steps]);
 
   const handleDeleteStep = useCallback(() => {
     // Check if step has attributes

@@ -27,6 +27,14 @@ import type {
  * App store interface
  */
 interface AppStore extends SelectionState, UIState, DataState {
+  // Journey Reorder Dialog (local UI state via store)
+  journeyReorderReorderedJourneys: Journey[];
+  journeyReorderHasChanges: boolean;
+  setJourneyReorderReorderedJourneys: (journeys: Journey[]) => void;
+  setJourneyReorderHasChanges: (hasChanges: boolean) => void;
+  updateJourneyReorderOrder: (oldIndex: number, newIndex: number) => void;
+  resetJourneyReorder: () => void;
+
   // Selection actions
   select: (type: SelectionType, id: EntityId | null, options?: SelectOptions) => void;
   clearSelection: () => void;
@@ -52,6 +60,7 @@ interface AppStore extends SelectionState, UIState, DataState {
   setServiceBlueprintOpen: (open: boolean) => void;
   setDraggedBlueprintItem: (item: unknown | null) => void;
   setCenterWhenClicked: (enabled: boolean) => void;
+  setDraggingStep: (dragging: boolean) => void;
 
   // Loading state actions
   setStepLoading: (stepId: EntityId, loading: boolean) => void;
@@ -88,9 +97,25 @@ interface AppStore extends SelectionState, UIState, DataState {
 
   // Step optimistic actions
   addStepToRightOptimistic: (rightOfStepId: EntityId) => Promise<void>;
+  reorderStepsOptimistic: (phaseId: EntityId, stepIds: EntityId[]) => void;
+  moveStepToPhaseOptimistic: (
+    stepId: EntityId,
+    targetPhaseId: EntityId,
+    beforeStepId?: EntityId | null
+  ) => {
+    sourcePhaseId: EntityId;
+    targetPhaseId: EntityId;
+    sourceOrder: EntityId[];
+    targetOrder: EntityId[];
+    revert: () => void;
+  };
+  removeStepOptimistic: (stepId: EntityId) => Promise<void>;
 
   // Phase optimistic actions
   addPhaseToRightOptimistic: (rightOfPhaseId: EntityId) => Promise<void>;
+
+  // Persistence middleware (batched, debounced)
+  scheduleReorderPersist: (phaseId: EntityId, delayMs?: number) => void;
 
   // Validation
   validateSelection: (journeyNodes?: unknown[]) => void;
@@ -119,10 +144,15 @@ export const useAppStore = create<AppStore>()(
       collapsedSubjourneys: new Set(),
       loadingSteps: new Set(),
       loadingSubjourneys: new Set(),
+      isDraggingStep: false,
       disableHover: false,
       isServiceBlueprintOpen: false,
       draggedBlueprintItem: null,
       isCenterWhenClicked: false,
+
+      // Journey Reorder Dialog state
+      journeyReorderReorderedJourneys: [],
+      journeyReorderHasChanges: false,
 
       // Data state
       currentJourney: null,
@@ -132,8 +162,48 @@ export const useAppStore = create<AppStore>()(
       attributes: [],
       flows: [],
       stepAttributes: {},
+      // Internal timers for batched persistence (internal, not part of public interface)
+      reorderPersistTimers: {},
 
       // ===== SELECTION ACTIONS =====
+
+      // Journey Reorder actions
+      setJourneyReorderReorderedJourneys: (journeys: Journey[]) => {
+        set({
+          journeyReorderReorderedJourneys: [...journeys],
+        });
+      },
+      setJourneyReorderHasChanges: (hasChanges: boolean) => {
+        set({
+          journeyReorderHasChanges: !!hasChanges,
+        });
+      },
+      updateJourneyReorderOrder: (oldIndex: number, newIndex: number) => {
+        const state = get();
+        const list = state.journeyReorderReorderedJourneys || [];
+        if (
+          oldIndex === newIndex ||
+          oldIndex < 0 ||
+          newIndex < 0 ||
+          oldIndex >= list.length ||
+          newIndex >= list.length
+        ) {
+          return;
+        }
+        const next = [...list];
+        const [moved] = next.splice(oldIndex, 1);
+        next.splice(newIndex, 0, moved);
+        set({
+          journeyReorderReorderedJourneys: next,
+          journeyReorderHasChanges: true,
+        });
+      },
+      resetJourneyReorder: () => {
+        set({
+          journeyReorderReorderedJourneys: [],
+          journeyReorderHasChanges: false,
+        });
+      },
 
       select: (type, id, options = {}) => {
         const { immediate = false, source = 'direct' } = options;
@@ -342,6 +412,10 @@ export const useAppStore = create<AppStore>()(
       },
 
       // ===== UI ACTIONS =====
+
+      setDraggingStep: (dragging) => {
+        set({ isDraggingStep: dragging });
+      },
 
       toggleSubjourneyCollapsed: (parentStepId, allJourneys) => {
         set((state) => {
@@ -752,11 +826,27 @@ export const useAppStore = create<AppStore>()(
         };
 
         // Optimistically update store: steps and currentJourney.allSteps
+        const stepsWithTemp = [...prevSteps, tempStep];
+        const allStepsWithTemp = [...(prevJourney.allSteps || []), tempStep];
+
+        // Normalize sequence_order for the affected phase to contiguous integers
+        const normalizeForPhase = (arr: Step[], phaseId: EntityId) => {
+          const phaseIds = arr
+            .filter((s) => s.phase_id === phaseId)
+            .sort((a, b) => a.sequence_order - b.sequence_order)
+            .map((s) => s.id);
+          const orderMap = new Map<string, number>();
+          phaseIds.forEach((id, i) => orderMap.set(id, i + 1));
+          return arr.map((s) =>
+            s.phase_id === phaseId && orderMap.has(s.id) ? { ...s, sequence_order: orderMap.get(s.id)! } : s
+          );
+        };
+
         set({
-          steps: [...prevSteps, tempStep],
+          steps: normalizeForPhase(stepsWithTemp, rightStep.phase_id),
           currentJourney: {
             ...prevJourney,
-            allSteps: [...(prevJourney.allSteps || []), tempStep],
+            allSteps: normalizeForPhase(allStepsWithTemp, rightStep.phase_id),
           },
         });
 
@@ -812,6 +902,185 @@ export const useAppStore = create<AppStore>()(
           throw err;
         } finally {
           state.setStepLoading(rightStep.phase_id, false);
+        }
+      },
+
+      reorderStepsOptimistic: (phaseId, stepIds) => {
+        const state = get();
+        const { steps, currentJourney } = state;
+        
+        // Update sequence_order for steps in this phase based on the new order
+        const updatedSteps = steps.map((step) => {
+          if (step.phase_id === phaseId) {
+            const newIndex = stepIds.indexOf(step.id);
+            if (newIndex >= 0) {
+              return {
+                ...step,
+                sequence_order: newIndex + 1,
+              };
+            }
+          }
+          return step;
+        });
+
+        // Update currentJourney.allSteps as well
+        const updatedAllSteps = currentJourney?.allSteps?.map((step) => {
+          if (step.phase_id === phaseId) {
+            const newIndex = stepIds.indexOf(step.id);
+            if (newIndex >= 0) {
+              return {
+                ...step,
+                sequence_order: newIndex + 1,
+              };
+            }
+          }
+          return step;
+        }) || [];
+
+        set({
+          steps: updatedSteps,
+          currentJourney: currentJourney
+            ? {
+                ...currentJourney,
+                allSteps: updatedAllSteps,
+              }
+            : null,
+        });
+      },
+      
+      moveStepToPhaseOptimistic: (stepId, targetPhaseId, beforeStepId = null) => {
+        const state = get();
+        const { steps, currentJourney } = state;
+        const prevSteps = steps;
+        const prevJourney = currentJourney;
+        const step = steps.find((s) => s.id === stepId);
+        if (!step || !currentJourney) {
+          return {
+            sourcePhaseId: '' as EntityId,
+            targetPhaseId,
+            sourceOrder: [],
+            targetOrder: [],
+            revert: () => {},
+          };
+        }
+        const sourcePhaseId = step.phase_id;
+        // Build lists
+        const sourceList = steps
+          .filter((s) => s.phase_id === sourcePhaseId && s.id !== stepId)
+          .sort((a, b) => a.sequence_order - b.sequence_order)
+          .map((s) => s.id);
+        const targetList = steps
+          .filter((s) => s.phase_id === targetPhaseId)
+          .sort((a, b) => a.sequence_order - b.sequence_order)
+          .map((s) => s.id);
+        // Compute insert index
+        let insertIndex = targetList.length;
+        if (beforeStepId) {
+          const idx = targetList.indexOf(String(beforeStepId));
+          if (idx >= 0) insertIndex = idx;
+        }
+        // New target list with moved step
+        const newTargetList = [...targetList];
+        newTargetList.splice(insertIndex, 0, String(stepId));
+        const newSourceList = [...sourceList];
+        // Produce new steps array with updated phase and contiguous sequence_order
+        const orderMap = new Map<string, number>();
+        newSourceList.forEach((id, i) => orderMap.set(id, i + 1));
+        newTargetList.forEach((id, i) => orderMap.set(id, i + 1));
+        const updatedSteps: Step[] = steps.map((s) => {
+          if (s.id === stepId) {
+            return { ...s, phase_id: String(targetPhaseId), sequence_order: orderMap.get(String(stepId)) || 1 };
+          }
+          if (s.phase_id === sourcePhaseId) {
+            return { ...s, sequence_order: orderMap.get(String(s.id)) || s.sequence_order };
+          }
+          if (s.phase_id === targetPhaseId) {
+            return { ...s, sequence_order: orderMap.get(String(s.id)) || s.sequence_order };
+          }
+          return s;
+        });
+        const updatedAllSteps: Step[] = (currentJourney.allSteps || []).map((s) => {
+          if (s.id === stepId) {
+            return { ...s, phase_id: String(targetPhaseId), sequence_order: orderMap.get(String(stepId)) || 1 };
+          }
+          if (s.phase_id === sourcePhaseId) {
+            return { ...s, sequence_order: orderMap.get(String(s.id)) || s.sequence_order };
+          }
+          if (s.phase_id === targetPhaseId) {
+            return { ...s, sequence_order: orderMap.get(String(s.id)) || s.sequence_order };
+          }
+          return s;
+        });
+        set({
+          steps: updatedSteps,
+          currentJourney: currentJourney
+            ? {
+                ...currentJourney,
+                allSteps: updatedAllSteps,
+              }
+            : null,
+        });
+        return {
+          sourcePhaseId,
+          targetPhaseId,
+          sourceOrder: newSourceList,
+          targetOrder: newTargetList,
+          revert: () => {
+            set({
+              steps: prevSteps,
+              currentJourney: prevJourney,
+            });
+          },
+        };
+      },
+
+      removeStepOptimistic: async (stepId) => {
+        const state = get();
+        const { steps, currentJourney } = state;
+        if (!currentJourney) return;
+
+        // Snapshot for revert
+        const prevSteps = steps;
+        const prevJourney = currentJourney;
+
+        const step = steps.find((s) => s.id === stepId);
+        if (!step) return;
+
+        const phaseId = step.phase_id;
+        const nextSteps = steps.filter((s) => s.id !== stepId);
+        const nextAllSteps = (currentJourney.allSteps || []).filter((s) => s.id !== stepId);
+
+        const normalizeForPhase = (arr: Step[], pId: EntityId) => {
+          const phaseList = arr
+            .filter((s) => s.phase_id === pId)
+            .sort((a, b) => a.sequence_order - b.sequence_order)
+            .map((s) => s.id);
+          const orderMap = new Map<string, number>();
+          phaseList.forEach((id, i) => orderMap.set(id, i + 1));
+          return arr.map((s) =>
+            s.phase_id === pId && orderMap.has(s.id) ? { ...s, sequence_order: orderMap.get(s.id)! } : s
+          );
+        };
+
+        // Optimistic remove + normalize
+        set({
+          steps: normalizeForPhase(nextSteps, phaseId),
+          currentJourney: {
+            ...currentJourney,
+            allSteps: normalizeForPhase(nextAllSteps, phaseId),
+          },
+        });
+
+        // Persist and reconcile on failure
+        try {
+          await (await import('../api')).journeysApi.deleteStep(String(stepId));
+        } catch (err) {
+          console.error('removeStepOptimistic failed, reverting', err);
+          set({
+            steps: prevSteps,
+            currentJourney: prevJourney,
+          });
+          throw err;
         }
       },
 
@@ -929,6 +1198,72 @@ export const useAppStore = create<AppStore>()(
           });
           throw err;
         }
+      },
+
+      scheduleReorderPersist: (phaseId, delayMs = 200) => {
+        // @ts-expect-error - internal timers bag
+        const timers: Record<string, ReturnType<typeof setTimeout> | undefined> = get().reorderPersistTimers || {};
+        // Clear existing timer for this phase
+        const existing = timers[String(phaseId)];
+        if (existing) {
+          clearTimeout(existing);
+        }
+        const timer = setTimeout(async () => {
+          const persistWithRetry = async (attemptsLeft: number, backoffMs: number) => {
+            try {
+              const { steps } = get();
+              const orderedFromStore = steps
+                .filter((s) => s.phase_id === phaseId)
+                .sort((a, b) => a.sequence_order - b.sequence_order)
+                .map((s) => String(s.id));
+
+              // Ensure we only include IDs the server currently recognizes in this phase
+              let serverIds: string[] = [];
+              try {
+                const api = await import('../api');
+                const serverSteps = await api.journeysApi.getPhaseSteps(String(phaseId));
+                serverIds = serverSteps.map((s) => String(s.id));
+              } catch {
+                // If we cannot read server membership, fall back to sending store order
+                serverIds = orderedFromStore;
+              }
+
+              const serverSet = new Set(serverIds);
+              let payload = orderedFromStore.filter((id) => serverSet.has(String(id)));
+              if (payload.length === 0 && serverIds.length > 0) {
+                // As a last resort, send server order to avoid 400; UI remains optimistic
+                payload = serverIds;
+              }
+
+              const api = await import('../api');
+              await api.journeysApi.reorderSteps(String(phaseId), payload);
+            } catch (err: any) {
+              const message = err?.message || '';
+              if (attemptsLeft > 0 && (message.includes('400') || message.includes('do not belong'))) {
+                await new Promise((r) => setTimeout(r, backoffMs));
+                return persistWithRetry(attemptsLeft - 1, Math.min(backoffMs * 2, 800));
+              }
+              // Swallow error; UI remains optimistic
+            }
+          };
+
+          await persistWithRetry(4, 120);
+          try {
+            // @ts-expect-error - internal timers bag
+            const t = get().reorderPersistTimers || {};
+            t[String(phaseId)] = undefined;
+            // @ts-expect-error - internal timers bag
+            set({ reorderPersistTimers: t });
+          } catch {
+            // ignore
+          }
+        }, delayMs);
+        // Save timer
+        // @ts-expect-error - internal timers bag
+        const nextTimers = { ...(get().reorderPersistTimers || {}) };
+        nextTimers[String(phaseId)] = timer;
+        // @ts-expect-error - internal timers bag
+        set({ reorderPersistTimers: nextTimers });
       },
 
       // ===== VALIDATION =====

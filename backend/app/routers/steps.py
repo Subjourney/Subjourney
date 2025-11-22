@@ -22,6 +22,9 @@ class StepUpdate(BaseModel):
     description: Optional[str] = None
     sequence_order: Optional[int] = None
 
+class MoveStepRequest(BaseModel):
+    phase_id: str
+
 class StepAttributeCreate(BaseModel):
     attribute_definition_id: str
     relationship_type: Optional[str] = "primary"
@@ -269,6 +272,105 @@ async def delete_step(step_id: str, current_user: dict = Depends(get_current_use
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete step: {str(e)}")
 
+
+@router.post("/{step_id}/move")
+async def move_step_to_phase(
+    step_id: str,
+    payload: MoveStepRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Move a step to a different phase and normalize sequence_order in both phases."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+
+        # Fetch the step to move (source phase and team)
+        step_result = (
+            supabase.table("steps")
+            .select("id, phase_id, team_id")
+            .eq("id", step_id)
+            .single()
+            .execute()
+        )
+        if not step_result.data:
+            raise HTTPException(status_code=404, detail="Step not found")
+
+        source_phase_id = step_result.data.get("phase_id")
+        step_team_id = step_result.data.get("team_id")
+
+        # Validate target phase and team access
+        target_phase_result = (
+            supabase.table("phases")
+            .select("id, journey_id, journeys!inner(team_id)")
+            .eq("id", payload.phase_id)
+            .single()
+            .execute()
+        )
+        if not target_phase_result.data:
+            raise HTTPException(status_code=404, detail="Target phase not found")
+
+        target_team_id = (
+            target_phase_result.data.get("journeys", {}) or {}
+        ).get("team_id")
+        if not target_team_id:
+            raise HTTPException(status_code=400, detail="Invalid target phase")
+
+        # Check team membership for target team
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", target_team_id)
+            .execute()
+        )
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Ensure the step team matches the target team (or allow move if same team)
+        if step_team_id != target_team_id:
+            raise HTTPException(status_code=400, detail="Cannot move step across different teams")
+
+        now = datetime.utcnow().isoformat()
+
+        # Determine next sequence_order in the target phase
+        max_order_res = (
+            supabase.table("steps")
+            .select("sequence_order")
+            .eq("phase_id", payload.phase_id)
+            .order("sequence_order", desc=True)
+            .limit(1)
+            .execute()
+        )
+        next_order = (max_order_res.data[0]["sequence_order"] + 1) if max_order_res.data else 1
+
+        # Update the step to new phase with next sequence order
+        supabase.table("steps").update(
+            {"phase_id": payload.phase_id, "sequence_order": next_order, "updated_at": now}
+        ).eq("id", step_id).execute()
+
+        # Normalize source phase ordering (1-based contiguous)
+        if source_phase_id and source_phase_id != payload.phase_id:
+            src_steps = (
+                supabase.table("steps")
+                .select("id")
+                .eq("phase_id", source_phase_id)
+                .order("sequence_order")
+                .execute()
+            )
+            if src_steps.data:
+                for idx, s in enumerate(src_steps.data):
+                    supabase.table("steps").update(
+                        {"sequence_order": idx + 1, "updated_at": now}
+                    ).eq("id", s["id"]).eq("phase_id", source_phase_id).execute()
+
+        return {"message": "Step moved successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to move step: {str(e)}")
 
 @router.get("/{step_id}/attributes")
 async def get_step_attributes(step_id: str, current_user: dict = Depends(get_current_user)):

@@ -52,7 +52,7 @@ function JourneyCanvasInner({
 }) {
   // Realtime subscriptions for attributes/step_attributes
   useRealtimeAttributes();
-  const { currentJourney, setCurrentJourney, loadStepAttributesForJourney, setAttributes } = useAppStore();
+  const { currentJourney, setCurrentJourney, loadStepAttributesForJourney, setAttributes, isDraggingStep } = useAppStore();
   const { clearSelection, selectedPhase, selectedStep } = useSelection();
   const { fitView, getNode, setCenter, getViewport, getZoom } = useReactFlow();
   const [parentJourney, setParentJourney] = useState<Journey | null>(null);
@@ -634,7 +634,7 @@ function JourneyCanvasInner({
           initialZoomHandledRef.current = true;
         }
 
-        if (selectedStep) {
+        if (selectedStep && !isDraggingStep) {
           const stepEl = document.querySelector(`[data-step-id="${selectedStep}"]`) as HTMLElement | null;
           if (stepEl && journeyEl) {
             // Only zoom on user-click selection when clipped
@@ -688,7 +688,7 @@ function JourneyCanvasInner({
         window.clearTimeout(fitHideTimerRef.current);
       }
     };
-  }, [nodes, fitView, selectedStep, selectedPhase, isFittingView]);
+  }, [nodes, fitView, selectedStep, selectedPhase, isFittingView, isDraggingStep]);
 
 
   const onNodesChange = useCallback((changes: unknown[]) => {

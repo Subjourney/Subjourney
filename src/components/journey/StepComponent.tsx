@@ -15,9 +15,11 @@ import { StepToolbar } from './StepToolbar';
 interface StepComponentProps {
   step: Step;
   hasSubjourney?: boolean;
+  zustandIndex?: number;
+  dbSeq?: number;
 }
 
-export function StepComponent({ step, hasSubjourney = false }: StepComponentProps) {
+export function StepComponent({ step, hasSubjourney = false, zustandIndex, dbSeq }: StepComponentProps) {
   const { getCardsForStep, attributes, getAttributeById, getPhaseById } = useAppStore();
   const { selectedStep, selectedAttribute, select } = useSelection();
   const cards = getCardsForStep(step.id);

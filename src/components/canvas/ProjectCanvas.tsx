@@ -209,9 +209,13 @@ function ProjectCanvasInner({
       journeyStepsMap.set(journey.id, allSteps);
     });
 
-    // Get parent journeys list for finding next journey (sorted deterministically by name then id)
+    // Get parent journeys list for finding next journey (sorted by sequence_order)
     const parentJourneys = journeys.filter((j) => !j.is_subjourney);
     const parentJourneysSorted = [...parentJourneys].sort((a, b) => {
+      const orderA = a.sequence_order ?? 0;
+      const orderB = b.sequence_order ?? 0;
+      if (orderA !== orderB) return orderA - orderB;
+      // Fallback to name then id if sequence_order is the same
       const byName = (a.name || '').localeCompare(b.name || '');
       if (byName !== 0) return byName;
       return String(a.id).localeCompare(String(b.id));

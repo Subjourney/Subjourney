@@ -4,6 +4,8 @@
  */
 
 import { useSortable } from '@dnd-kit/react/sortable';
+import { PointerSensor } from '@dnd-kit/react';
+import { useReactFlow } from '@xyflow/react';
 import type { Card } from '../../types';
 import { useSelection } from '../../store';
 
@@ -15,13 +17,31 @@ interface DraggableCardProps {
 
 export function DraggableCard({ card, stepId, index }: DraggableCardProps) {
   const { selectedCard, select } = useSelection();
+  const { getZoom } = useReactFlow();
+  const zoom = typeof getZoom === 'function' ? getZoom() : 1;
+  const baseDistance = 6; // slightly lower for small cards
+  const normalizedDistance = Math.max(zoom, 0.01) * baseDistance;
+
   const sortable = useSortable({
     id: card.id,
+    sensors: [
+      PointerSensor.configure({
+        activationConstraints: () => ({
+          distance: { value: normalizedDistance },
+        }),
+      }),
+    ],
+    index,
     data: {
       type: 'card',
       card,
       stepId,
       index,
+    },
+    transition: {
+      duration: 200,
+      easing: 'ease-out',
+      idle: true, // Animate when index changes during drag
     },
   });
 
@@ -41,6 +61,7 @@ export function DraggableCard({ card, stepId, index }: DraggableCardProps) {
       ref={sortable.ref}
       style={{
         opacity: sortable.isDragging ? 0.5 : 1,
+        willChange: sortable.isDragging || sortable.isDropping ? 'transform' : 'auto',
         padding: 'var(--spacing-sm)',
         backgroundColor: isSelected ? 'var(--color-primary-light)' : 'var(--surface-3)',
         border: isSelected

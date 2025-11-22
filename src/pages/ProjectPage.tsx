@@ -477,27 +477,85 @@ export function ProjectPage() {
           const { supabase } = await import('../lib/supabase');
           const now = new Date().toISOString();
           
-          for (let index = 0; index < journeyIds.length; index++) {
-            await supabase
+          try {
+            // Update each journey's sequence_order
+            for (let index = 0; index < journeyIds.length; index++) {
+              const { error } = await supabase
+                .from('journeys')
+                .update({ 
+                  sequence_order: index + 1,
+                  updated_at: now 
+                })
+                .eq('id', journeyIds[index])
+                .eq('project_id', projectId)
+                .eq('is_subjourney', false);
+              
+              if (error) {
+                console.error(`Failed to update journey ${journeyIds[index]}:`, error);
+                throw error;
+              }
+            }
+            
+            // Reload ALL journeys (including subjourneys) to reflect new order
+            const { data: journeysData, error: fetchError } = await supabase
               .from('journeys')
-              .update({ 
-                sequence_order: index + 1,
-                updated_at: now 
-              })
-              .eq('id', journeyIds[index])
+              .select('*')
               .eq('project_id', projectId)
-              .eq('is_subjourney', false);
-          }
-          
-          // Reload journeys to reflect new order
-          const { data: journeysData } = await supabase
-            .from('journeys')
-            .select('*')
-            .eq('project_id', projectId)
-            .order('created_at', { ascending: false });
-          
-          if (journeysData) {
-            setJourneys(journeysData);
+              .order('created_at', { ascending: false });
+            
+            if (fetchError) {
+              console.error('Failed to reload journeys:', fetchError);
+              throw fetchError;
+            }
+            
+            if (journeysData) {
+              setJourneys(journeysData);
+              
+              // Reload phases and steps for all journeys (including subjourneys)
+              const phasesMap: Record<string, Phase[]> = {};
+              const stepsMap: Record<string, Step[]> = {};
+              
+              for (const journey of journeysData) {
+                // Load phases for this journey
+                const { data: phasesData } = await supabase
+                  .from('phases')
+                  .select('*')
+                  .eq('journey_id', journey.id)
+                  .order('sequence_order', { ascending: true });
+                
+                if (phasesData) {
+                  phasesMap[journey.id] = phasesData;
+                  
+                  // Load steps for all phases in this journey
+                  const phaseIds = phasesData.map((p) => p.id);
+                  if (phaseIds.length > 0) {
+                    const { data: stepsData } = await supabase
+                      .from('steps')
+                      .select('*')
+                      .in('phase_id', phaseIds)
+                      .order('sequence_order', { ascending: true });
+                    
+                    if (stepsData) {
+                      // Group steps by phase_id
+                      stepsData.forEach((step) => {
+                        if (!stepsMap[step.phase_id]) {
+                          stepsMap[step.phase_id] = [];
+                        }
+                        stepsMap[step.phase_id].push(step);
+                      });
+                    }
+                  }
+                } else {
+                  phasesMap[journey.id] = [];
+                }
+              }
+              
+              setJourneyPhases(phasesMap);
+              setPhaseSteps(stepsMap);
+            }
+          } catch (error) {
+            console.error('Failed to reorder journeys:', error);
+            throw error;
           }
         }}
         journeys={journeys}

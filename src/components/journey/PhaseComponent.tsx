@@ -75,17 +75,17 @@ export function PhaseComponent({ phase, stepsWithSubjourneys, steps: providedSte
       >
         {phase.name}
       </div>
-      <div className="phase-steps" style={{ display: 'flex', flexDirection: 'row', gap: 'var(--spacing-md)' }}>
-        {sortedSteps.map((step, index) => (
-          <DraggableStep 
-            key={step.id} 
-            step={step} 
-            phaseId={phase.id} 
-            index={index}
-            hasSubjourney={stepsWithSubjourneys?.has(step.id) || false}
-          />
-        ))}
-      </div>
+        <div className="phase-steps" style={{ display: 'flex', flexDirection: 'row', gap: 'var(--spacing-md)' }}>
+          {sortedSteps.map((step, index) => (
+            <DraggableStep 
+              key={step.id} 
+              step={step} 
+              phaseId={phase.id} 
+              index={index}
+              hasSubjourney={stepsWithSubjourneys?.has(step.id) || false}
+            />
+          ))}
+        </div>
     </div>
   );
 }

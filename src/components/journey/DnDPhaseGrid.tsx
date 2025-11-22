@@ -26,29 +26,29 @@ export function DnDPhaseGrid({ phases, subjourneys = [], steps = [] }: DnDPhaseG
   );
 
   return (
-    <div
-      className="phase-grid"
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        gap: '16px',
-        width: 'fit-content',
-      }}
-    >
-      {sortedPhases.map((phase, index) => {
-        // Get steps for this phase from the provided steps array
-        const phaseSteps = steps.filter((s) => s.phase_id === phase.id);
-        return (
-          <DraggablePhase 
-            key={phase.id} 
-            phase={phase} 
-            index={index}
-            stepsWithSubjourneys={stepsWithSubjourneys}
-            steps={phaseSteps}
-          />
-        );
-      })}
-    </div>
+      <div
+        className="phase-grid"
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '16px',
+          width: 'fit-content',
+        }}
+      >
+        {sortedPhases.map((phase, index) => {
+          // Get steps for this phase from the provided steps array
+          const phaseSteps = steps.filter((s) => s.phase_id === phase.id);
+          return (
+            <DraggablePhase 
+              key={phase.id} 
+              phase={phase} 
+              index={index}
+              stepsWithSubjourneys={stepsWithSubjourneys}
+              steps={phaseSteps}
+            />
+          );
+        })}
+      </div>
   );
 }
 

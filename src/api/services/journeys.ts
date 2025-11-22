@@ -106,6 +106,13 @@ export async function deleteStep(stepId: string): Promise<void> {
 }
 
 /**
+ * Get steps for a phase
+ */
+export async function getPhaseSteps(phaseId: string): Promise<Step[]> {
+  return apiClient.get<Step[]>(`/api/steps/phase/${phaseId}`);
+}
+
+/**
  * Create a subjourney for a step
  * Returns the complete parent journey structure
  */
