@@ -14,6 +14,7 @@ export interface LayoutOptions {
   marginX?: number;
   marginY?: number;
   preferDomMeasurements?: boolean;
+  nodeSequenceOrder?: Map<string, number>; // Map of node ID to sequence_order for enforcing order
 }
 
 const DEFAULT_OPTIONS: Required<Omit<LayoutOptions, 'rowSep'>> & { rowSep?: number } = {
@@ -35,10 +36,10 @@ const elk = new ELK();
 function convertToElkGraph(
   nodes: Node[],
   edges: Edge[],
-  options: Required<Omit<LayoutOptions, 'rowSep'>> & { rowSep?: number },
+  options: Required<Omit<LayoutOptions, 'rowSep' | 'nodeSequenceOrder'>> & { rowSep?: number; nodeSequenceOrder?: Map<string, number> },
   mainJourneyIds?: Set<string>
 ): ElkNode {
-  const children: ElkNode[] = nodes.map((node) => {
+  const children: ElkNode[] = nodes.map((node, index) => {
     let width = node.width || 300;
     let height = node.height || 250;
 
@@ -61,13 +62,44 @@ function convertToElkGraph(
       height,
     };
 
-    // Force main journeys to layer 0 (leftmost) by setting high priority
-    // Higher priority nodes are placed earlier in the layout
-    if (mainJourneyIds && mainJourneyIds.has(String(node.id))) {
-      elkNode.layoutOptions = {
-        'elk.priority': '10', // High priority to ensure they're in first layer
-        'elk.layered.crossingMinimization.positionChoice.strategy': 'NODES',
-      };
+    // Build layout options
+    const layoutOptions: Record<string, string> = {};
+
+    // Add sequence_order-based priority to enforce order
+    // In ELK, lower priority numbers = higher priority (appear first)
+    // So lower sequence_order should get lower priority numbers
+    if (options.nodeSequenceOrder) {
+      const sequenceOrder = options.nodeSequenceOrder.get(String(node.id));
+      if (sequenceOrder !== undefined) {
+        // For main journeys: use base priority 10 + sequence_order
+        // This ensures they stay in layer 0, ordered by sequence_order
+        // Lower sequence_order gets lower priority number = appears first
+        if (mainJourneyIds && mainJourneyIds.has(String(node.id))) {
+          layoutOptions['elk.priority'] = String(10 + sequenceOrder);
+          layoutOptions['elk.layered.crossingMinimization.positionChoice.strategy'] = 'NODES';
+        } else {
+          // For subjourneys: use higher base priority (1000+) + sequence_order
+          // This ensures they appear after main journeys, but ordered by sequence_order
+          layoutOptions['elk.priority'] = String(1000 + sequenceOrder);
+        }
+      } else if (mainJourneyIds && mainJourneyIds.has(String(node.id))) {
+        // Main journey without sequence_order: use default priority
+        layoutOptions['elk.priority'] = '10';
+        layoutOptions['elk.layered.crossingMinimization.positionChoice.strategy'] = 'NODES';
+      }
+    } else {
+      // If no sequence_order map provided, use array index to maintain order
+      // Main journeys get priority 10 + index, subjourneys get 1000 + index
+      if (mainJourneyIds && mainJourneyIds.has(String(node.id))) {
+        layoutOptions['elk.priority'] = String(10 + index);
+        layoutOptions['elk.layered.crossingMinimization.positionChoice.strategy'] = 'NODES';
+      } else {
+        layoutOptions['elk.priority'] = String(1000 + index);
+      }
+    }
+
+    if (Object.keys(layoutOptions).length > 0) {
+      elkNode.layoutOptions = layoutOptions;
     }
 
     return elkNode;
@@ -104,6 +136,7 @@ function convertToElkGraph(
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP', // Minimize edge crossings
       'elk.layered.crossingMinimization.forceNodeModelOrder': 'true', // Force ELK to respect the order of nodes in the array
       'elk.considerModelOrder.strategy': 'NODES_AND_EDGES', // Respect the order of nodes in the array
+      'elk.portAlignment.basic': 'JUSTIFIED', // Align ports to maintain order
       // Tree-specific optimizations
       'elk.layered.cycleBreaking.strategy': 'GREEDY', // Break any cycles (shouldn't exist in trees, but safety)
       'elk.layered.layering.strategy': 'INTERACTIVE', // Good for tree structures
@@ -150,47 +183,5 @@ export async function applyElkLayout(
   return {
     nodes: layoutedNodes,
     edges,
-  };
-}
-
-/**
- * Stub implementation for backward compatibility
- * TODO: Remove once all callers are updated to use applyElkLayout
- */
-export function applyDagreLayout(
-  nodes: Node[],
-  edges: Edge[],
-  _options: LayoutOptions = {}
-): { nodes: Node[]; edges: Edge[] } {
-  // Return nodes unchanged - manual positioning should be done in the component
-  return { nodes, edges };
-}
-
-/**
- * Stub implementation for backward compatibility
- * TODO: Remove once all callers are updated
- */
-export function layoutChildrenWithinContainer(
-  parentNode: Node,
-  childNodes: Node[],
-  _options: LayoutOptions = {}
-): { nodes: Node[]; parentSize: { width: number; height: number } } {
-  if (childNodes.length === 0) {
-    return {
-      nodes: [],
-      parentSize: {
-        width: parentNode.width || 400,
-        height: parentNode.height || 300,
-      },
-    };
-  }
-
-  // Return nodes unchanged - manual positioning should be done in the component
-  return {
-    nodes: childNodes,
-    parentSize: {
-      width: parentNode.width || 400,
-      height: parentNode.height || 300,
-    },
   };
 }

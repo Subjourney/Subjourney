@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, SignOut } from '@phosphor-icons/react';
+import { ArrowLeft, SignOut, DotsThree, Trash } from '@phosphor-icons/react';
 import { JourneyCanvas } from '../components/canvas';
 import { useAuth } from '../hooks/useAuth';
 import { signOut } from '../lib/auth';
@@ -8,7 +8,7 @@ import { journeysApi } from '../api';
 import { useAppStore } from '../store';
 import { useSelection } from '../store/hooks';
 import type { Journey } from '../types';
-import { Button } from '../components/ui';
+import { Button, DropMenu, MenuListItem, DialogConfirm } from '../components/ui';
 
 /**
  * Journey Page
@@ -29,6 +29,9 @@ export function JourneyPage() {
   const [journey, setJourney] = useState<Journey | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   
   // Handle phase/step selection from URL params
   useEffect(() => {
@@ -82,6 +85,29 @@ export function JourneyPage() {
     navigate('/login');
   };
 
+  const handleDeleteJourney = () => {
+    setMenuOpen(false);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!journeyId || !journey) return;
+
+    try {
+      await journeysApi.deleteJourney(journeyId);
+      // Navigate to project page after successful deletion
+      navigate(teamSlug && projectId ? `/${teamSlug}/project/${projectId}` : '/');
+    } catch (error) {
+      console.error('Error deleting journey:', error);
+      setDeleteConfirmOpen(false);
+      // TODO: Show error message to user
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmOpen(false);
+  };
+
   if (loading) {
     return (
       <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -118,9 +144,10 @@ export function JourneyPage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          pointerEvents: 'none',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', pointerEvents: 'auto' }}>
           <Button
             icon={ArrowLeft}
             iconPosition="left"
@@ -134,10 +161,19 @@ export function JourneyPage() {
             {journey?.name || `Journey ${journeyId}`}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', pointerEvents: 'auto' }}>
           <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
             {user?.email}
           </div>
+          <Button
+            ref={menuButtonRef}
+            icon={DotsThree}
+            iconOnly
+            iconWeight="bold"
+            variant="secondary"
+            size="md"
+            onClick={() => setMenuOpen(!menuOpen)}
+          />
           <Button
             icon={SignOut}
             iconPosition="left"
@@ -148,12 +184,40 @@ export function JourneyPage() {
             Sign Out
           </Button>
         </div>
+        <DropMenu
+          anchorRef={menuButtonRef}
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+        >
+          <MenuListItem
+            icon={Trash}
+            iconPosition="left"
+            variant="danger"
+            onClick={handleDeleteJourney}
+            fullWidth
+          >
+            Delete Journey
+          </MenuListItem>
+        </DropMenu>
       </div>
 
       {/* Journey Canvas - full viewport, header floats above */}
       <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
         <JourneyCanvas journeyId={journeyId || ''} initialTarget={initialTarget || undefined} />
       </div>
+
+      {/* Delete Journey Confirmation Dialog */}
+      <DialogConfirm
+        open={deleteConfirmOpen}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        title="Delete Journey?"
+        message={`Are you sure you want to delete "${journey?.name || 'this journey'}"? This will permanently delete the journey and all of its data, including phases, steps, and all related content. This action cannot be undone.`}
+        confirmLabel="Delete Journey"
+        cancelLabel="Cancel"
+        confirmVariant="danger"
+      />
     </div>
   );
 }

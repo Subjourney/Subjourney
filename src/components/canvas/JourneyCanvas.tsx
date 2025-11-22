@@ -379,14 +379,16 @@ function JourneyCanvasInner({
     // Row 3: Subjourney nodes underneath the journey node
     if (currentJourney.subjourneys && currentJourney.subjourneys.length > 0) {
       const allPhases = currentJourney.allPhases || [];
+      const allSteps = currentJourney.allSteps || [];
       const stepToPhase = new Map<string, typeof allPhases[0]>();
+      const stepToStep = new Map<string, typeof allSteps[0]>();
       
-      // Build step to phase map
+      // Build step to phase and step to step maps
       currentJourney.subjourneys.forEach((subjourney) => {
         if (subjourney.parent_step_id && !stepToPhase.has(subjourney.parent_step_id)) {
-          const allSteps = currentJourney.allSteps || [];
           const step = allSteps.find(s => s.id === subjourney.parent_step_id);
           if (step) {
+            stepToStep.set(subjourney.parent_step_id, step);
             const phase = allPhases.find(p => p.id === step.phase_id);
             if (phase) {
               stepToPhase.set(subjourney.parent_step_id, phase);
@@ -395,7 +397,39 @@ function JourneyCanvasInner({
         }
       });
 
-      currentJourney.subjourneys.forEach((subjourney) => {
+      // Sort subjourneys by phase sequence_order, then by step sequence_order within the same phase
+      const sortedSubjourneys = [...currentJourney.subjourneys].sort((a, b) => {
+        const phaseA = a.parent_step_id ? stepToPhase.get(a.parent_step_id) : null;
+        const phaseB = b.parent_step_id ? stepToPhase.get(b.parent_step_id) : null;
+        const stepA = a.parent_step_id ? stepToStep.get(a.parent_step_id) : null;
+        const stepB = b.parent_step_id ? stepToStep.get(b.parent_step_id) : null;
+
+        // If either subjourney has no parent step, put it at the end
+        if (!phaseA && !phaseB) return 0;
+        if (!phaseA) return 1;
+        if (!phaseB) return -1;
+
+        // Sort by phase sequence_order first
+        const phaseOrderA = phaseA.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        const phaseOrderB = phaseB.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        if (phaseOrderA !== phaseOrderB) {
+          return phaseOrderA - phaseOrderB;
+        }
+
+        // If same phase, sort by step sequence_order
+        if (stepA && stepB) {
+          const stepOrderA = stepA.sequence_order ?? Number.MAX_SAFE_INTEGER;
+          const stepOrderB = stepB.sequence_order ?? Number.MAX_SAFE_INTEGER;
+          if (stepOrderA !== stepOrderB) {
+            return stepOrderA - stepOrderB;
+          }
+        }
+
+        // Fallback to ID for stable sort
+        return String(a.id).localeCompare(String(b.id));
+      });
+
+      sortedSubjourneys.forEach((subjourney) => {
         const subPhases = subjourney.allPhases || [];
         const subSteps = subjourney.allSteps || [];
         const subHeaderHeight = 40;

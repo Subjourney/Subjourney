@@ -22,7 +22,15 @@ export async function getJourney(
  * Create a new journey
  */
 export async function createJourney(
-  data: { project_id: string; name: string; description?: string }
+  data: {
+    project_id: string;
+    name: string;
+    description?: string;
+    // Optional fields to support creating subjourneys
+    is_subjourney?: boolean;
+    parent_step_id?: string | null;
+    continue_step_id?: string | null;
+  }
 ): Promise<Journey> {
   return apiClient.post<Journey>('/api/journeys/create', data);
 }

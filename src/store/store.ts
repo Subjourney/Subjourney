@@ -114,6 +114,8 @@ interface AppStore extends SelectionState, UIState, DataState {
     targetOrder: EntityId[];
     revert: () => void;
   };
+  // Subjourney optimistic actions
+  createSubjourneyForStepOptimistic: (parentStepId: EntityId, name?: string) => Promise<void>;
   removeStepOptimistic: (stepId: EntityId) => Promise<void>;
 
   // Phase optimistic actions
@@ -930,6 +932,93 @@ export const useAppStore = create<AppStore>()(
           throw err;
         } finally {
           state.setStepLoading(rightStep.phase_id, false);
+        }
+      },
+
+      // ===== SUBJOURNEY OPTIMISTIC ACTIONS =====
+      createSubjourneyForStepOptimistic: async (parentStepId, name = 'Subjourney') => {
+        const state = get();
+        const { currentJourney } = state;
+        if (!currentJourney) return;
+        // Ensure parent step belongs to current journey
+        const parentStep = (currentJourney.allSteps || []).find((s) => s.id === parentStepId);
+        if (!parentStep) return;
+
+        // Mark loading state on this step
+        state.setSubjourneyLoading(parentStepId, true);
+
+        // Snapshot for revert
+        const prevJourney = currentJourney;
+
+        // Create temporary subjourney
+        const tempId = `temp-subjourney-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const tempSubjourney: Journey = {
+          id: tempId,
+          team_id: currentJourney.team_id,
+          project_id: currentJourney.project_id,
+          name,
+          description: '',
+          summary: '',
+          is_subjourney: true,
+          parent_step_id: String(parentStepId),
+          continue_step_id: undefined,
+          sequence_order: undefined,
+          // denormalized fields for UI
+          allPhases: [],
+          allSteps: [],
+          allCards: [],
+          subjourneys: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        // Optimistically append subjourney to currentJourney
+        const nextJourney: Journey = {
+          ...currentJourney,
+          subjourneys: [...(currentJourney.subjourneys || []), tempSubjourney],
+        };
+        set({ currentJourney: nextJourney });
+
+        try {
+          // Persist subjourney creation via journeys.createJourney with subjourney fields
+          const newSubjourney = await (await import('../api')).journeysApi.createJourney({
+            project_id: String(currentJourney.project_id),
+            name,
+            is_subjourney: true,
+            parent_step_id: String(parentStepId),
+          });
+          
+          // Create initial phase and step (matching DialogJourney.tsx pattern)
+          try {
+            const { PHASE_COLORS } = await import('../utils/phaseColors');
+            // Randomly select a color from the palette
+            const randomColorIndex = Math.floor(Math.random() * PHASE_COLORS.length);
+            const phase = await (await import('../api')).journeysApi.createPhase(newSubjourney.id, {
+              name: 'Phase 1',
+              sequence_order: 0,
+              color: PHASE_COLORS[randomColorIndex],
+            });
+            
+            // Create initial step in the phase
+            await (await import('../api')).journeysApi.createStep(phase.id, {
+              name: 'Step 1',
+              sequence_order: 0,
+            });
+          } catch (phaseError) {
+            console.error('Failed to create initial phase/step for subjourney:', phaseError);
+            // Continue anyway - subjourney was created successfully
+          }
+          
+          // Refresh parent journey structure to include the new subjourney with its phase and step
+          const refreshed = await (await import('../api')).journeysApi.getJourney(String(currentJourney.id), true);
+          state.setCurrentJourney(refreshed);
+        } catch (err) {
+          console.error('createSubjourneyForStepOptimistic failed, reverting', err);
+          // Revert on failure
+          set({ currentJourney: prevJourney });
+          throw err;
+        } finally {
+          state.setSubjourneyLoading(parentStepId, false);
         }
       },
 

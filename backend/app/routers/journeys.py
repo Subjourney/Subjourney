@@ -613,3 +613,57 @@ async def reorder_phases(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reorder phases: {str(e)}")
 
+
+@router.delete("/{journey_id}")
+async def delete_journey(
+    journey_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a journey."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+        
+        # Get journey
+        result = (
+            supabase.table("journeys")
+            .select("*")
+            .eq("id", journey_id)
+            .execute()
+        )
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Journey not found")
+        
+        journey = result.data[0]
+        team_id = journey.get("team_id")
+        
+        # Verify user has access to the team
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied to this journey")
+        
+        # Delete journey (cascade will handle related data if configured in database)
+        result = (
+            supabase.table("journeys")
+            .delete()
+            .eq("id", journey_id)
+            .execute()
+        )
+        
+        return {"message": "Journey deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete journey: {str(e)}")
+

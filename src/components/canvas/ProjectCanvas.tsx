@@ -101,6 +101,139 @@ function ProjectCanvasInner({
     [select, onJourneyClick, navigate, teamSlug, project.id]
   );
 
+  // Helper function to add spacing between rows (main journey + all its descendants)
+  // Each row consists of a main journey and all its subjourneys at any level
+  // This ensures proper spacing between complete journey hierarchies
+  const addSpacingBetweenRows = useCallback((
+    layoutedNodes: Node[],
+    allJourneys: Journey[],
+    extraSpacing: number
+  ): Node[] => {
+    if (extraSpacing <= 0) return layoutedNodes;
+
+    // Build maps for quick lookups
+    const journeyMap = new Map<string, Journey>();
+    allJourneys.forEach(j => journeyMap.set(j.id, j));
+
+    // Build stepIdToJourneyId map
+    const stepIdToJourneyId = new Map<string, string>();
+    journeys.forEach((journey) => {
+      const phases = journeyPhases[journey.id] || [];
+      phases.forEach((phase) => {
+        const steps = phaseSteps[phase.id] || [];
+        steps.forEach((step) => {
+          stepIdToJourneyId.set(step.id, journey.id);
+        });
+      });
+    });
+
+    // Find all main journeys (top-level)
+    const mainJourneys = allJourneys.filter(j => !j.is_subjourney);
+    
+    // For each main journey, find ALL its descendant nodes (including itself)
+    const findDescendants = (mainJourneyId: string): Node[] => {
+      const descendants: Node[] = [];
+      
+      // Add the main journey node itself
+      const mainNode = layoutedNodes.find(n => n.id === mainJourneyId);
+      if (mainNode) {
+        descendants.push(mainNode);
+      }
+      
+      // Recursively find all subjourneys
+      const findSubjourneys = (targetParentJourneyId: string) => {
+        allJourneys.forEach(journey => {
+          if (journey.is_subjourney && journey.parent_step_id) {
+            const journeyParentId = stepIdToJourneyId.get(journey.parent_step_id);
+            if (journeyParentId === targetParentJourneyId) {
+              const node = layoutedNodes.find(n => n.id === journey.id);
+              if (node) {
+                descendants.push(node);
+                // Recursively find subjourneys of this subjourney
+                findSubjourneys(journey.id);
+              }
+            }
+          }
+        });
+      };
+      
+      findSubjourneys(mainJourneyId);
+      return descendants;
+    };
+
+    // Build rows: each row contains a main journey and all its descendants
+    const rows = mainJourneys
+      .sort((a, b) => {
+        const orderA = a.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        const orderB = b.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      })
+      .map(mainJourney => ({
+        mainJourneyId: mainJourney.id,
+        nodes: findDescendants(mainJourney.id),
+      }))
+      .filter(row => row.nodes.length > 0);
+
+    if (rows.length <= 1) return layoutedNodes;
+
+    // Sort rows by the topmost Y position
+    const sortedRows = rows.sort((a, b) => {
+      const topA = Math.min(...a.nodes.map(n => n.position?.y || 0));
+      const topB = Math.min(...b.nodes.map(n => n.position?.y || 0));
+      return topA - topB;
+    });
+
+    // Add extra spacing between rows - apply equal spacing to each gap independently
+    const result = layoutedNodes.map(n => ({ ...n }));
+
+    for (let i = 0; i < sortedRows.length - 1; i++) {
+      const currentRow = sortedRows[i];
+      const nextRow = sortedRows[i + 1];
+
+      // Find bottom of current row (bottom-most node in the entire hierarchy)
+      // Use the current positions in result (which may have been shifted)
+      const bottomOfCurrent = Math.max(
+        ...currentRow.nodes.map(n => {
+          const node = result.find(r => r.id === n.id);
+          return (node?.position?.y || 0) + (node?.height || 250);
+        })
+      );
+
+      // Find top of next row (top-most node in the next hierarchy)
+      // Use the current positions in result (which may have been shifted)
+      const topOfNext = Math.min(
+        ...nextRow.nodes.map(n => {
+          const node = result.find(r => r.id === n.id);
+          return node?.position?.y || 0;
+        })
+      );
+
+      // Calculate the desired position for the next row to achieve exactly extraSpacing gap
+      const desiredTopOfNext = bottomOfCurrent + extraSpacing;
+      const spaceToAdd = desiredTopOfNext - topOfNext;
+      
+      // Apply the shift to make this gap exactly extraSpacing
+      // Only shift the next row and all subsequent rows (not accumulating, just applying the same shift)
+      if (spaceToAdd !== 0) {
+        for (let j = i + 1; j < sortedRows.length; j++) {
+          sortedRows[j].nodes.forEach(node => {
+            const nodeIndex = result.findIndex(n => n.id === node.id);
+            if (nodeIndex >= 0) {
+              result[nodeIndex] = {
+                ...result[nodeIndex],
+                position: {
+                  ...result[nodeIndex].position!,
+                  y: (result[nodeIndex].position?.y || 0) + spaceToAdd,
+                },
+              };
+            }
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [journeys, journeyPhases, phaseSteps]);
 
   // Create nodes and edges structure
   const { nodes: rawNodes, edges } = useMemo(() => {
@@ -223,18 +356,21 @@ function ProjectCanvasInner({
       journeyStepsMap.set(journey.id, allSteps);
     });
 
-    // Get parent journeys list for finding next journey (sorted by sequence_order)
+    // Get parent journeys list for finding next journey (sorted by sequence_order descending)
     const parentJourneys = journeys.filter((j) => !j.is_subjourney);
     const parentJourneysSorted = [...parentJourneys].sort((a, b) => {
       const orderA = a.sequence_order ?? Number.MAX_SAFE_INTEGER;
       const orderB = b.sequence_order ?? Number.MAX_SAFE_INTEGER;
       if (orderA !== orderB) {
-        return orderA - orderB;
+        return orderB - orderA; // Descending order (higher sequence_order first)
       }
-      // Fallback to name then id for deterministic ordering when sequence_order is the same
-      const byName = (a.name || '').localeCompare(b.name || '');
-      if (byName !== 0) return byName;
-      return String(a.id).localeCompare(String(b.id));
+      // Strict fallback: created_at descending, then id for absolute determinism
+      const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (createdA !== createdB) {
+        return createdB - createdA; // Descending order
+      }
+      return String(b.id).localeCompare(String(a.id)); // Descending order
     });
 
     // Create edges from final step of subjourneys to their continuation targets
@@ -331,19 +467,30 @@ function ProjectCanvasInner({
       }
     });
 
-    // Create edges connecting top-level journeys in sequence
-    // Connect bottom of each journey to top of the next one
-    // (use sorted parent journeys for deterministic sequence)
-    // These edges are used for row spacing in ELK layout
-    for (let i = 0; i < parentJourneysSorted.length - 1; i++) {
-      const currentJourney = parentJourneysSorted[i];
-      const nextJourney = parentJourneysSorted[i + 1];
+    // Connect all consecutive top-level journeys by ascending sequence_order (1->2, 2->3, ...)
+    const parentJourneysAsc = [...parentJourneys].sort((a, b) => {
+      const orderA = a.sequence_order ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.sequence_order ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (createdA !== createdB) {
+        return createdA - createdB;
+      }
+      return String(a.id).localeCompare(String(b.id));
+    });
+    for (let i = 0; i < parentJourneysAsc.length - 1; i++) {
+      const fromJourney = parentJourneysAsc[i];
+      const toJourney = parentJourneysAsc[i + 1];
+      if (!fromJourney || !toJourney) continue;
       flowEdges.push({
-        id: `edge-journey-${currentJourney.id}-to-${nextJourney.id}`,
-        source: currentJourney.id,
-        sourceHandle: `journey-${currentJourney.id}-bottom`, // Bottom handle of current journey
-        target: nextJourney.id,
-        targetHandle: `journey-${nextJourney.id}-top`, // Top handle of next journey
+        id: `edge-journey-${fromJourney.id}-to-${toJourney.id}`,
+        source: fromJourney.id,
+        sourceHandle: `journey-${fromJourney.id}-bottom`, // Bottom handle of source journey
+        target: toJourney.id,
+        targetHandle: `journey-${toJourney.id}-top`, // Top handle of target journey
         type: 'default',
         style: {
           stroke: 'var(--color-connector-dashed)',
@@ -354,8 +501,7 @@ function ProjectCanvasInner({
           type: MarkerType.ArrowClosed,
           color: 'var(--color-connector-dashed)',
         },
-        isRowSpacingEdge: true, // Mark this edge for row spacing control
-      } as Edge & { isRowSpacingEdge?: boolean });
+      });
     }
 
     // Helper function to get the parent step's sequence_order for a subjourney
@@ -394,17 +540,17 @@ function ProjectCanvasInner({
         return 0;
       }
       
-      // Both are top-level journeys - sort by sequence_order
+      // Both are top-level journeys - sort by sequence_order descending
       if (!journeyA.is_subjourney && !journeyB.is_subjourney) {
         const orderA = journeyA.sequence_order ?? Number.MAX_SAFE_INTEGER;
         const orderB = journeyB.sequence_order ?? Number.MAX_SAFE_INTEGER;
         if (orderA !== orderB) {
-          return orderA - orderB;
+          return orderB - orderA; // Descending order (higher sequence_order first)
         }
-        // If sequence_order is the same, fall back to name then id
-        const byName = (journeyA.name || '').localeCompare(journeyB.name || '');
+        // If sequence_order is the same, fall back to name then id (descending)
+        const byName = (journeyB.name || '').localeCompare(journeyA.name || '');
         if (byName !== 0) return byName;
-        return String(journeyA.id).localeCompare(String(journeyB.id));
+        return String(journeyB.id).localeCompare(String(journeyA.id));
       }
       
       // Top-level journeys come before subjourneys
@@ -472,25 +618,48 @@ function ProjectCanvasInner({
       journeys.filter(j => !j.is_subjourney).map(j => j.id)
     );
 
+    // Build sequence_order map for all journeys to enforce order
+    // This ensures ELK respects the sequence_order from the database
+    // For descending order: we'll invert the priority in layout.ts
+    const nodeSequenceOrder = new Map<string, number>();
+    const journeysWithOrder = journeys.filter(j => j.sequence_order !== undefined && j.sequence_order !== null);
+    const maxSequenceOrder = journeysWithOrder.length > 0
+      ? Math.max(...journeysWithOrder.map(j => j.sequence_order!))
+      : 0;
+    journeys.forEach((journey) => {
+      if (journey.sequence_order !== undefined && journey.sequence_order !== null) {
+        // Store inverted sequence_order for descending display
+        // Higher sequence_order should appear first, so we invert it
+        nodeSequenceOrder.set(journey.id, maxSequenceOrder - journey.sequence_order + 1);
+      }
+    });
+
     applyElkLayout(rawNodes, layoutEdges, {
       direction: 'LR', // Left to Right
       nodeSep, // Vertical spacing between nodes in same column
       rankSep, // Horizontal spacing between columns (levels)
-      rowSep, // Spacing between rows (main journeys and their descendants)
       marginX: 50,
       marginY: 50,
       preferDomMeasurements: false, // Use node.width/height for stability
+      nodeSequenceOrder, // Pass sequence_order map to enforce order
     }, mainJourneyIds)
       .then((layouted) => {
-        // Use ELK's native spacing - no post-processing needed
-        setNodes(layouted.nodes);
+        // Post-process: Add extra vertical spacing between rows
+        // Each row consists of a main journey and all its descendants (subjourneys at any level)
+        // This ensures proper spacing between complete journey hierarchies
+        const processedNodes = addSpacingBetweenRows(
+          layouted.nodes,
+          journeys,
+          rowSep
+        );
+        setNodes(processedNodes);
       })
       .catch((error) => {
         console.error('ELK layout error:', error);
         // Fallback to raw nodes if layout fails
         setNodes(rawNodes);
       });
-  }, [rawNodes, edges, nodeSep, rankSep, rowSep]);
+  }, [rawNodes, edges, nodeSep, rankSep, rowSep, journeys, addSpacingBetweenRows]);
 
 
   const onNodesChange: OnNodesChange = useCallback((_changes) => {
@@ -548,7 +717,17 @@ function ProjectCanvasInner({
     >
       <Background color={backgroundDotColor || defaultDotColor} />
       <Controls />
-      <MiniMap></MiniMap>
+      <MiniMap
+      maskColor="#202020"
+      nodeColor="#404040"
+  className="my-minimap"
+  style={{
+    backgroundColor: 'var(--surface-2)',
+    borderRadius: 24,
+    height: 140,
+    width: 200,
+  }}
+/>
       
       {/* Spacing Control Panel - Bottom Left (next to React Flow controls) */}
       <div

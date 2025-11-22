@@ -7,7 +7,6 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { TextAlignLeft, Sparkle, Plus, ArrowDown, Trash, Path } from '@phosphor-icons/react';
 import { useAppStore } from '../../store';
 import { useSelection } from '../../store';
-import { journeysApi } from '../../api';
 import { flowsApi } from '../../api';
 import { Button } from '../ui/Button';
 import { DialogConfirm } from '../ui/DialogConfirm';
@@ -25,9 +24,6 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
     selectedPhase,
     isStepLoading,
     isSubjourneyLoading,
-    setSubjourneyLoading,
-    setCurrentJourney,
-    currentJourney,
     steps,
     getAttributesForStep,
   } = useAppStore();
@@ -144,23 +140,12 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
   const handleCreateSubjourney = useCallback(async () => {
     if (!step.id) return;
 
-    setSubjourneyLoading(step.id, true);
-
     try {
-      const updatedJourney = await journeysApi.createSubjourney(step.id, {
-        name: 'Subjourney',
-        is_subjourney: true,
-      });
-
-      if (currentJourney) {
-        setCurrentJourney(updatedJourney);
-      }
+      await useAppStore.getState().createSubjourneyForStepOptimistic(step.id, 'Subjourney');
     } catch (error) {
       console.error('Failed to create subjourney:', error);
-    } finally {
-      setSubjourneyLoading(step.id, false);
     }
-  }, [step.id, currentJourney, setSubjourneyLoading, setCurrentJourney]);
+  }, [step.id]);
 
   const performDeleteStep = useCallback(async () => {
     if (!step.id) return;

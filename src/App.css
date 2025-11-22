@@ -808,6 +808,10 @@
   max-width: 140px;
 }
 
+.rounded-minimap .react-flow__minimap-mask {
+  rx: 12; /* for SVG rounding */
+}
+
 /* ============================================
    Step Toolbar
    ============================================ */
