@@ -822,7 +822,8 @@
   justify-content: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-xs);
-  background-color: var(--surface-2);
+  background-color: var(--surface-3);
+  border: var(--border-default);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   pointer-events: auto;
@@ -871,6 +872,15 @@
   opacity: 0.1;
 }
 
+.step-toolbar-button-delete {
+  color: var(--color-error) !important;
+}
+
+.step-toolbar-button-delete:hover:not(:disabled) {
+  background-color: var(--color-error) !important;
+  color: #ffffff !important;
+}
+
 .step-toolbar-icon {
   color: var(--color-text-primary);
   flex-shrink: 0;
@@ -889,7 +899,7 @@
 .step-toolbar-divider {
   width: 1px;
   height: 24px;
-  background-color: var(--color-border-2);
+  background-color: var(--color-border-1);
 }
 
 .step-toolbar-spinner {

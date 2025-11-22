@@ -69,6 +69,11 @@ export interface StepActions {
   addStepToRightOptimistic: (rightOfStepId: EntityId) => Promise<void>;
 }
 
+// Phase optimistic actions
+export interface PhaseActions {
+  addPhaseToRightOptimistic: (rightOfPhaseId: EntityId) => Promise<void>;
+}
+
 /**
  * Selection options
  */

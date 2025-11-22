@@ -732,6 +732,8 @@ function JourneyCanvasInner({
         maxZoom={2}
         panOnScroll={true}
         selectionOnDrag={true}
+        elementsSelectable={true}
+        nodesDraggable={false}
         panOnDrag={[1]}
       >
         <Background color={backgroundDotColor || defaultDotColor} />

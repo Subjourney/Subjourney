@@ -87,6 +87,10 @@ class JourneyUpdate(BaseModel):
     description: str | None = None
 
 
+class ReorderPhasesRequest(BaseModel):
+    phase_ids: List[str]
+
+
 class JourneyResponse(BaseModel):
     id: str
     project_id: str
@@ -545,4 +549,67 @@ async def get_journey_structure(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get journey structure: {str(e)}")
+
+
+@router.post("/{journey_id}/reorder-phases")
+async def reorder_phases(
+    journey_id: str,
+    payload: ReorderPhasesRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reorder phases within a journey by setting sequence_order based on provided list."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+
+        # Verify access via journey -> team
+        journey_result = (
+            supabase.table("journeys")
+            .select("team_id")
+            .eq("id", journey_id)
+            .execute()
+        )
+        if not journey_result.data:
+            raise HTTPException(status_code=404, detail="Journey not found")
+
+        team_id = journey_result.data[0].get("team_id")
+
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Validate that provided phase IDs belong to this journey
+        if payload.phase_ids:
+            phases_check = (
+                supabase.table("phases")
+                .select("id")
+                .in_("id", payload.phase_ids)
+                .eq("journey_id", journey_id)
+                .execute()
+            )
+            valid_ids = {row["id"] for row in (phases_check.data or [])}
+            if not valid_ids.issuperset(set(payload.phase_ids)):
+                raise HTTPException(status_code=400, detail="One or more phases do not belong to the journey")
+
+        # Update sequence_order according to provided order (1-based indexing)
+        now = datetime.utcnow().isoformat()
+        for index, phase_id in enumerate(payload.phase_ids):
+            supabase.table("phases").update(
+                {"sequence_order": index + 1, "updated_at": now}
+            ).eq("id", phase_id).eq("journey_id", journey_id).execute()
+
+        return {"message": "Phases reordered successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reorder phases: {str(e)}")
 

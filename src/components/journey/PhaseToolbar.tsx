@@ -8,6 +8,7 @@ import { TextAlignLeft, Sparkle, Plus, Trash } from '@phosphor-icons/react';
 import { useAppStore } from '../../store';
 import { useSelection } from '../../store';
 import { journeysApi } from '../../api';
+import { Button } from '../ui/Button';
 import type { Phase } from '../../types';
 
 interface PhaseToolbarProps {
@@ -20,6 +21,7 @@ export function PhaseToolbar({ phase, phaseColor }: PhaseToolbarProps) {
     editingActive,
     setCurrentJourney,
     currentJourney,
+    addPhaseToRightOptimistic,
   } = useAppStore();
   const { selectedPhase } = useSelection();
 
@@ -113,79 +115,93 @@ export function PhaseToolbar({ phase, phaseColor }: PhaseToolbarProps) {
       role="toolbar"
       aria-label="Phase actions"
     >
-      <button
+      <Button
         ref={(el) => {
           const idx = getButtonIndex();
           buttonRefs.current[idx] = el;
         }}
-        className={`step-toolbar-button ${focusedIndex === 0 ? 'step-toolbar-button-focused' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          // TODO: Implement text align action
-        }}
-        tabIndex={focusedIndex === 0 ? 0 : -1}
-        title="Text align left"
-        aria-label="Text align left"
-      >
-        <TextAlignLeft size={16} className="step-toolbar-icon" />
-      </button>
-
-      <button
-        ref={(el) => {
-          const idx = getButtonIndex();
-          buttonRefs.current[idx] = el;
-        }}
-        className={`step-toolbar-button ${focusedIndex === 1 ? 'step-toolbar-button-focused' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          // TODO: Implement sparkle action
-        }}
-        tabIndex={focusedIndex === 1 ? 0 : -1}
-        title="Sparkle action"
-        aria-label="Sparkle action"
-      >
-        <Sparkle size={16} className="step-toolbar-icon" />
-      </button>
-
-      <button
-        ref={(el) => {
-          const idx = getButtonIndex();
-          buttonRefs.current[idx] = el;
-        }}
-        className={`step-toolbar-button ${focusedIndex === 2 ? 'step-toolbar-button-focused' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          // TODO: Implement add step action
-        }}
-        tabIndex={focusedIndex === 2 ? 0 : -1}
-        title="Add step"
-        aria-label="Add step"
-      >
-        <Plus size={16} className="step-toolbar-icon" />
-      </button>
-
-      <div className="step-toolbar-divider" />
-
-      <button
-        ref={(el) => {
-          const idx = getButtonIndex();
-          buttonRefs.current[idx] = el;
-        }}
-        className={`step-toolbar-button step-toolbar-button-danger ${
-          focusedIndex === 3 ? 'step-toolbar-button-focused' : ''
-        }`}
+        icon={Trash}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        style={{ color: 'var(--color-error)' }}
+        className="step-toolbar-button-delete"
+        focusRing={focusedIndex === 0 ? 'default' : 'none'}
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           handleDeletePhase();
         }}
         onMouseDown={(e) => e.stopPropagation()}
-        tabIndex={focusedIndex === 3 ? 0 : -1}
+        tabIndex={focusedIndex === 0 ? 0 : -1}
         title="Delete phase"
         aria-label="Delete phase"
-      >
-        <Trash size={16} className="step-toolbar-icon-danger" />
-      </button>
+      />
+
+      <div className="step-toolbar-divider" />
+
+      <Button
+        ref={(el) => {
+          const idx = getButtonIndex();
+          buttonRefs.current[idx] = el;
+        }}
+        icon={TextAlignLeft}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        focusRing={focusedIndex === 1 ? 'default' : 'none'}
+        onClick={(e) => {
+          e.stopPropagation();
+          // TODO: Implement text align action
+        }}
+        tabIndex={focusedIndex === 1 ? 0 : -1}
+        title="Text align left"
+        aria-label="Text align left"
+      />
+
+      <Button
+        ref={(el) => {
+          const idx = getButtonIndex();
+          buttonRefs.current[idx] = el;
+        }}
+        icon={Sparkle}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        focusRing={focusedIndex === 2 ? 'default' : 'none'}
+        onClick={(e) => {
+          e.stopPropagation();
+          // TODO: Implement sparkle action
+        }}
+        tabIndex={focusedIndex === 2 ? 0 : -1}
+        title="Sparkle action"
+        aria-label="Sparkle action"
+      />
+
+      <Button
+        ref={(el) => {
+          const idx = getButtonIndex();
+          buttonRefs.current[idx] = el;
+        }}
+        icon={Plus}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        focusRing={focusedIndex === 3 ? 'default' : 'none'}
+        onClick={async (e) => {
+          e.stopPropagation();
+          if (phase.id) {
+            await addPhaseToRightOptimistic(phase.id);
+          }
+        }}
+        tabIndex={focusedIndex === 3 ? 0 : -1}
+        title="Add phase to the right"
+        aria-label="Add phase to the right"
+      />
     </div>
   );
 }

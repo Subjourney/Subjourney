@@ -3,7 +3,6 @@
  * Renders a phase with its steps
  */
 
-import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Phase, Step } from '../../types';
 import { useAppStore } from '../../store';
 import { useSelection } from '../../store';
@@ -16,9 +15,17 @@ interface PhaseComponentProps {
   steps?: Step[]; // Steps for this phase (if provided, use these instead of store)
 }
 
+// Helper function to convert hex to rgba
+function hexToRgba(hex: string, opacity: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
 export function PhaseComponent({ phase, stepsWithSubjourneys, steps: providedSteps }: PhaseComponentProps) {
   const { getStepsForPhase } = useAppStore();
-  const { select } = useSelection();
+  const { select, selectedPhase } = useSelection();
   // Use provided steps if available (for subjourneys), otherwise get from store
   const steps = providedSteps || getStepsForPhase(phase.id);
 
@@ -27,7 +34,8 @@ export function PhaseComponent({ phase, stepsWithSubjourneys, steps: providedSte
     (a, b) => a.sequence_order - b.sequence_order
   );
 
-  const stepIds = sortedSteps.map((s) => s.id);
+  const isSelected = selectedPhase === phase.id;
+  const phaseColor = phase.color || '#3B82F6';
 
   const handleHeaderClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -55,8 +63,8 @@ export function PhaseComponent({ phase, stepsWithSubjourneys, steps: providedSte
           fontWeight: 'var(--font-weight-bold)',
           marginBottom: 'var(--spacing-sm)',
           fontSize: 'var(--font-size-base)',
-          color: 'var(--color-text-primary-dark)',
-          backgroundColor: phase.color || 'var(--surface-2)',
+          color: isSelected ? '#ffffff' : phaseColor,
+          backgroundColor: isSelected ? phaseColor : hexToRgba(phaseColor, 0.24),
           paddingLeft: '14px',
           paddingRight: '14px',
           paddingTop: '10px',
@@ -67,19 +75,17 @@ export function PhaseComponent({ phase, stepsWithSubjourneys, steps: providedSte
       >
         {phase.name}
       </div>
-      <SortableContext items={stepIds} strategy={horizontalListSortingStrategy}>
-        <div className="phase-steps" style={{ display: 'flex', flexDirection: 'row', gap: 'var(--spacing-md)' }}>
-          {sortedSteps.map((step, index) => (
-            <DraggableStep 
-              key={step.id} 
-              step={step} 
-              phaseId={phase.id} 
-              index={index}
-              hasSubjourney={stepsWithSubjourneys?.has(step.id) || false}
-            />
-          ))}
-        </div>
-      </SortableContext>
+      <div className="phase-steps" style={{ display: 'flex', flexDirection: 'row', gap: 'var(--spacing-md)' }}>
+        {sortedSteps.map((step, index) => (
+          <DraggableStep 
+            key={step.id} 
+            step={step} 
+            phaseId={phase.id} 
+            index={index}
+            hasSubjourney={stepsWithSubjourneys?.has(step.id) || false}
+          />
+        ))}
+      </div>
     </div>
   );
 }

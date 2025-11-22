@@ -70,6 +70,7 @@ export function JourneyOverviewNode(props: NodeProps) {
         border: 'var(--border-default)',
         borderRadius: 'var(--radius-lg)',
         boxShadow: 'var(--shadow-md)',
+        overflow: 'hidden',
         cursor: 'default',
         position: 'relative',
         '--measured-width': `${size.width}px`,

@@ -10,6 +10,8 @@ export { DialogJourney } from './DialogJourney';
 export type { DialogJourneyProps } from './DialogJourney';
 export { DialogConfirm } from './DialogConfirm';
 export type { DialogConfirmProps } from './DialogConfirm';
+export { DialogJourneyReorder } from './DialogJourneyReorder';
+export type { DialogJourneyReorderProps } from './DialogJourneyReorder';
 export { DropMenu } from './DropMenu';
 export type { DropMenuProps } from './DropMenu';
 export { MenuListItem } from './MenuListItem';

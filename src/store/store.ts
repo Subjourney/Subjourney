@@ -89,6 +89,9 @@ interface AppStore extends SelectionState, UIState, DataState {
   // Step optimistic actions
   addStepToRightOptimistic: (rightOfStepId: EntityId) => Promise<void>;
 
+  // Phase optimistic actions
+  addPhaseToRightOptimistic: (rightOfPhaseId: EntityId) => Promise<void>;
+
   // Validation
   validateSelection: (journeyNodes?: unknown[]) => void;
 }
@@ -809,6 +812,122 @@ export const useAppStore = create<AppStore>()(
           throw err;
         } finally {
           state.setStepLoading(rightStep.phase_id, false);
+        }
+      },
+
+      // ===== PHASE OPTIMISTIC ACTIONS =====
+      addPhaseToRightOptimistic: async (rightOfPhaseId) => {
+        const state = get();
+        const { phases, currentJourney } = state;
+        const rightPhase = phases.find((p) => p.id === rightOfPhaseId);
+        if (!rightPhase || !currentJourney) return;
+
+        // Compute target insertion position within journey
+        const journeyPhases = phases
+          .filter((p) => p.journey_id === rightPhase.journey_id)
+          .sort((a, b) => a.sequence_order - b.sequence_order);
+        const rightIndex = journeyPhases.findIndex((p) => p.id === rightOfPhaseId);
+        const nextPhase = rightIndex >= 0 && rightIndex < journeyPhases.length - 1 ? journeyPhases[rightIndex + 1] : null;
+        const tempSequence =
+          nextPhase != null
+            ? (rightPhase.sequence_order + nextPhase.sequence_order) / 2
+            : rightPhase.sequence_order + 1;
+
+        // Snapshot previous state for revert
+        const prevPhases = phases;
+        const prevJourney = currentJourney;
+
+        // Get default color for new phase (cycle through colors)
+        const phaseCount = journeyPhases.length;
+        const { getPhaseColor } = await import('../utils/phaseColors');
+        const defaultColor = getPhaseColor(phaseCount);
+
+        // Create a temporary client-only phase (optimistic)
+        const tempId = `temp-phase-${Date.now()}`;
+        const tempPhase: Phase = {
+          id: tempId,
+          team_id: rightPhase.team_id,
+          journey_id: rightPhase.journey_id,
+          name: 'New Phase',
+          sequence_order: tempSequence,
+          color: defaultColor,
+          is_subjourney: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        // Optimistically update store: phases and currentJourney.allPhases
+        set({
+          phases: [...prevPhases, tempPhase],
+          currentJourney: {
+            ...prevJourney,
+            allPhases: [...(prevJourney.allPhases || []), tempPhase],
+          },
+        });
+
+        try {
+          // 1) Persist: create phase on server
+          const createdPhase = await (await import('../api')).journeysApi.createPhase(rightPhase.journey_id, {
+            name: tempPhase.name,
+            sequence_order: Math.ceil(tempSequence),
+            color: defaultColor,
+          });
+
+          // 2) Refresh journey structure from server to ensure durability on refresh
+          const refreshedAfterCreate = await (await import('../api')).journeysApi.getJourney(currentJourney.id, true);
+          state.setCurrentJourney(refreshedAfterCreate);
+
+          // 3) Ensure ordering: place new phase right of target and persist order (best effort)
+          const journeyPhasesAfterCreate = (refreshedAfterCreate.allPhases || [])
+            .filter((p) => p.journey_id === rightPhase.journey_id)
+            .sort((a, b) => a.sequence_order - b.sequence_order)
+            .map((p) => p.id);
+
+          let finalRefreshedJourney = refreshedAfterCreate;
+
+          if (createdPhase?.id && journeyPhasesAfterCreate.includes(createdPhase.id)) {
+            const withoutNew = journeyPhasesAfterCreate.filter((id) => id !== createdPhase.id);
+            const insertAfterIndex = withoutNew.indexOf(rightOfPhaseId);
+            const desiredOrder = [...withoutNew];
+            desiredOrder.splice(insertAfterIndex + 1, 0, createdPhase.id);
+
+            try {
+              await (await import('../api')).journeysApi.reorderPhases(rightPhase.journey_id, desiredOrder);
+              finalRefreshedJourney = await (await import('../api')).journeysApi.getJourney(currentJourney.id, true);
+              state.setCurrentJourney(finalRefreshedJourney);
+            } catch (reorderErr) {
+              console.warn('Failed to reorder phases after creation; using server ordering', reorderErr);
+            }
+          }
+
+          // 4) Create a default step in the new phase
+          if (createdPhase?.id) {
+            try {
+              await (await import('../api')).journeysApi.createStep(createdPhase.id, {
+                name: 'New Step',
+                sequence_order: 1,
+              });
+
+              // 5) Refresh journey to include the new step
+              const refreshedWithStep = await (await import('../api')).journeysApi.getJourney(currentJourney.id, true);
+              state.setCurrentJourney(refreshedWithStep);
+
+              // Select the newly created phase
+              state.select('selectedPhase', createdPhase.id);
+            } catch (stepErr) {
+              console.error('Failed to create default step in new phase', stepErr);
+              // Still select the phase even if step creation fails
+              state.select('selectedPhase', createdPhase.id);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to create phase, reverting optimistic UI', err);
+          // Revert
+          set({
+            phases: prevPhases,
+            currentJourney: prevJourney,
+          });
+          throw err;
         }
       },
 

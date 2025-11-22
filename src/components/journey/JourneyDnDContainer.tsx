@@ -8,7 +8,6 @@ import { useCallback } from 'react';
 import { DragDropProvider } from '@dnd-kit/react';
 import type { Journey } from '../../types';
 import { DnDPhaseGrid } from './DnDPhaseGrid';
-import { JourneyTitle } from './JourneyTitle';
 import { useAppStore } from '../../store';
 import { journeysApi, cardsApi } from '../../api';
 
@@ -24,19 +23,26 @@ export function JourneyDnDContainer({ journey }: JourneyDnDContainerProps) {
   const { setCurrentJourney, phases, steps, cards } = useAppStore();
 
   // Handle drag start
-  const handleDragStart = useCallback((_event: any) => {
+  const handleDragStart = useCallback((event: any, _manager: any) => {
+    const { operation } = event;
     // Track active drag if needed in the future
+    if (operation?.source) {
+      // Drag started
+    }
   }, []);
 
   // Handle drag end - reorder phases, steps, or cards
   const handleDragEnd = useCallback(
-      async (event: any) => {
-      if (event?.canceled || !event?.operation?.source || !event?.operation?.target) return;
+      async (event: any, _manager: any) => {
+      const { operation, canceled } = event;
+      
+      if (canceled || !operation?.source || !operation?.target) return;
 
-      const activeId = String(event.operation.source.id);
-      const overId = String(event.operation.target.id);
-      const activeData = event.operation.source.data?.current;
-      const overData = event.operation.target.data?.current;
+      const { source, target } = operation;
+      const activeId = String(source.id);
+      const overId = String(target.id);
+      const activeData = source.data?.current;
+      const overData = target.data?.current;
 
       // Phase reordering
       if (activeData?.type === 'phase' && overData?.type === 'phase' && activeId !== overId) {
@@ -198,7 +204,6 @@ export function JourneyDnDContainer({ journey }: JourneyDnDContainerProps) {
           boxSizing: 'border-box',
         }}
       >
-        <JourneyTitle journey={journey} />
         <DnDPhaseGrid 
           phases={journey.allPhases || []} 
           subjourneys={journey.subjourneys || []}

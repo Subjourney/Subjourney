@@ -103,9 +103,10 @@ export function StepComponent({ step, hasSubjourney = false }: StepComponentProp
 
       <div
         style={{
-          fontWeight: 'var(--font-weight-medium)',
-          marginBottom: 'var(--spacing-xs)',
+          fontWeight: 'var(--font-weight-semibold)',
+          marginBottom: 'var(--spacing-sm)',
           color: 'var(--color-text-primary)',
+          fontSize: 'var(--font-size-base)',
         }}
       >
         {step.name}

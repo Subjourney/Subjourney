@@ -42,6 +42,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   iconOnly?: boolean;
   /** Focus ring style */
   focusRing?: FocusRing;
+  /** Border radius (CSS value, e.g., '4px', 'var(--radius-md)', '50%') */
+  borderRadius?: string;
 }
 
 const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
@@ -126,7 +128,7 @@ const hoverStyles: Record<ButtonVariant, React.CSSProperties> = {
     borderColor: 'var(--color-border-1)',
   },
   ghost: {
-    backgroundColor: 'var(--surface-2)',
+    backgroundColor: 'var(--surface-4)',
   },
   danger: {
     backgroundColor: '#dc2626',
@@ -149,6 +151,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     fullWidth = false,
     iconOnly = false,
     focusRing = 'none',
+    borderRadius = 'var(--radius-md)',
     disabled,
     onFocus,
     onBlur,
@@ -189,7 +192,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: iconPushRight && iconPosition === 'right' ? 'space-between' : 'center',
-    borderRadius: 'var(--radius-md)',
+    borderRadius,
     fontWeight: 'var(--font-weight-medium)',
     cursor: isDisabled ? 'not-allowed' : 'pointer',
     opacity: isDisabled ? 0.5 : 1,
@@ -202,6 +205,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   };
 
   const iconSize = size === 'sm' ? 16 : size === 'md' ? 18 : 20;
+  const isLoading = state === 'loading';
 
   const handleFocus = (e: React.FocusEvent<HTMLButtonElement>) => {
     setIsFocused(true);
@@ -211,6 +215,27 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   const handleBlur = (e: React.FocusEvent<HTMLButtonElement>) => {
     setIsFocused(false);
     onBlur?.(e);
+  };
+
+  // Determine spinner position based on button configuration
+  const getSpinnerPosition = (): React.CSSProperties => {
+    if (isIconOnly) {
+      // Icon-only: spinner is centered (no margins needed)
+      return {};
+    }
+    
+    if (hasTwoIcons) {
+      // Two icons: spinner replaces left icon
+      return { marginRight: 'var(--spacing-xs)' };
+    }
+    
+    if (iconPosition === 'right') {
+      // Right icon: spinner replaces right icon
+      return { marginLeft: 'var(--spacing-xs)' };
+    }
+    
+    // Left icon or no icon: spinner on left
+    return { marginRight: 'var(--spacing-xs)' };
   };
 
   return (
@@ -224,26 +249,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       onFocus={handleFocus}
       onBlur={handleBlur}
     >
-      {/* Left icon (or single icon when iconPosition is left) */}
-      {Icon && (isIconOnly || iconPosition === 'left' || hasTwoIcons) && (
-        <Icon size={iconSize} weight={iconWeight} style={{ flexShrink: 0 }} />
-      )}
-      
-      {/* Label/children */}
-      {children && !isIconOnly && (
-        <span style={labelAlignStyle}>{children}</span>
-      )}
-      
-      {/* Right icon - either EndIcon (two-icon mode) or Icon (single icon on right) */}
-      {hasTwoIcons && EndIcon && (
-        <EndIcon size={iconSize} weight={endIconWeight} style={{ flexShrink: 0 }} />
-      )}
-      {!hasTwoIcons && Icon && !isIconOnly && iconPosition === 'right' && (
-        <Icon size={iconSize} weight={iconWeight} style={{ flexShrink: 0 }} />
-      )}
-      
-      {/* Loading spinner */}
-      {state === 'loading' && (
+      {/* Loading spinner - replaces icons when loading */}
+      {isLoading ? (
         <div
           style={{
             width: iconSize,
@@ -252,10 +259,30 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
             borderTopColor: 'transparent',
             borderRadius: '50%',
             animation: 'spin 0.6s linear infinite',
-            marginLeft: iconPosition === 'right' || hasTwoIcons ? 0 : 'var(--spacing-xs)',
-            marginRight: iconPosition === 'left' ? 0 : 'var(--spacing-xs)',
+            flexShrink: 0,
+            ...getSpinnerPosition(),
           }}
         />
+      ) : (
+        <>
+          {/* Left icon (or single icon when iconPosition is left) */}
+          {Icon && (isIconOnly || iconPosition === 'left' || hasTwoIcons) && (
+            <Icon size={iconSize} weight={iconWeight} style={{ flexShrink: 0 }} />
+          )}
+          
+          {/* Label/children */}
+          {children && !isIconOnly && (
+            <span style={labelAlignStyle}>{children}</span>
+          )}
+          
+          {/* Right icon - either EndIcon (two-icon mode) or Icon (single icon on right) */}
+          {hasTwoIcons && EndIcon && (
+            <EndIcon size={iconSize} weight={endIconWeight} style={{ flexShrink: 0 }} />
+          )}
+          {!hasTwoIcons && Icon && !isIconOnly && iconPosition === 'right' && (
+            <Icon size={iconSize} weight={iconWeight} style={{ flexShrink: 0 }} />
+          )}
+        </>
       )}
     </button>
   );

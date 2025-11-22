@@ -9,6 +9,8 @@ import { useAppStore } from '../../store';
 import { useSelection } from '../../store';
 import { journeysApi } from '../../api';
 import { flowsApi } from '../../api';
+import { Button } from '../ui/Button';
+import { DialogConfirm } from '../ui/DialogConfirm';
 import type { Step } from '../../types';
 
 interface StepToolbarProps {
@@ -23,16 +25,17 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
     selectedPhase,
     isStepLoading,
     isSubjourneyLoading,
-    setStepLoading,
     setSubjourneyLoading,
     setCurrentJourney,
     currentJourney,
     steps,
+    getAttributesForStep,
   } = useAppStore();
   const { selectedStep } = useSelection();
 
   const [isStepInFlow, setIsStepInFlow] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const isSelected = selectedStep === step.id;
@@ -159,7 +162,7 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
     }
   }, [step.id, currentJourney, setSubjourneyLoading, setCurrentJourney]);
 
-  const handleDeleteStep = useCallback(async () => {
+  const performDeleteStep = useCallback(async () => {
     if (!step.id || !currentJourney) return;
 
     // Find the previous step before deletion
@@ -187,6 +190,27 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
     }
   }, [step.id, step.phase_id, currentJourney, steps, setCurrentJourney]);
 
+  const handleDeleteStep = useCallback(() => {
+    // Check if step has attributes
+    const stepAttributes = getAttributesForStep(step.id);
+    if (stepAttributes && stepAttributes.length > 0) {
+      // Show confirmation dialog if attributes exist
+      setShowDeleteConfirm(true);
+    } else {
+      // Delete directly if no attributes
+      performDeleteStep();
+    }
+  }, [step.id, getAttributesForStep, performDeleteStep]);
+
+  const handleConfirmDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+    performDeleteStep();
+  }, [performDeleteStep]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+  }, []);
+
   if (!shouldShow) return null;
 
   const buttonIndex = { current: 0 };
@@ -200,106 +224,110 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
       role="toolbar"
       aria-label="Step actions"
     >
+      <Button
+        ref={(el) => {
+          const idx = getButtonIndex();
+          buttonRefs.current[idx] = el;
+        }}
+        icon={Trash}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        style={{ color: 'var(--color-error)' }}
+        className="step-toolbar-button-delete"
+        focusRing={focusedIndex === 0 ? 'default' : 'none'}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDeleteStep();
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        tabIndex={focusedIndex === 0 ? 0 : -1}
+        title="Delete step"
+        aria-label="Delete step"
+      />
+
+      <div className="step-toolbar-divider" />
+
       {selectedFlow && (
         <>
-          <button
+          <Button
             ref={(el) => {
               const idx = getButtonIndex();
               buttonRefs.current[idx] = el;
             }}
-            className={`step-toolbar-button ${isStepInFlow ? 'step-toolbar-button-active' : ''} ${
-              focusedIndex === 0 ? 'step-toolbar-button-focused' : ''
-            }`}
-            style={isStepInFlow ? { backgroundColor: phaseColor } : {}}
+            icon={Path}
+            iconOnly
+            size="sm"
+            variant="ghost"
+            borderRadius="var(--radius-sm)"
+            style={isStepInFlow ? { backgroundColor: phaseColor, color: '#ffffff' } : {}}
             onClick={(e) => {
               e.stopPropagation();
               handleToggleFlow();
             }}
             onMouseDown={(e) => e.stopPropagation()}
-            tabIndex={focusedIndex === 0 ? 0 : -1}
+            tabIndex={focusedIndex === 1 ? 0 : -1}
             title={isStepInFlow ? 'Step is in flow' : 'Add step to flow'}
             aria-label={isStepInFlow ? 'Remove step from flow' : 'Add step to flow'}
-          >
-            <Path size={16} className={isStepInFlow ? 'step-toolbar-icon-white' : 'step-toolbar-icon'} />
-          </button>
+          />
           <div className="step-toolbar-divider" />
         </>
       )}
 
-      <button
+      <Button
         ref={(el) => {
           const idx = getButtonIndex();
           buttonRefs.current[idx] = el;
         }}
-        className={`step-toolbar-button ${focusedIndex === (selectedFlow ? 1 : 0) ? 'step-toolbar-button-focused' : ''}`}
+        icon={TextAlignLeft}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        focusRing={focusedIndex === (selectedFlow ? 2 : 1) ? 'default' : 'none'}
         onClick={(e) => {
           e.stopPropagation();
           // TODO: Implement text align action
         }}
-        tabIndex={focusedIndex === (selectedFlow ? 1 : 0) ? 0 : -1}
+        tabIndex={focusedIndex === (selectedFlow ? 2 : 1) ? 0 : -1}
         title="Text align left"
         aria-label="Text align left"
-      >
-        <TextAlignLeft size={16} className="step-toolbar-icon" />
-      </button>
+      />
 
-      <button
+      <Button
         ref={(el) => {
           const idx = getButtonIndex();
           buttonRefs.current[idx] = el;
         }}
-        className={`step-toolbar-button ${focusedIndex === (selectedFlow ? 2 : 1) ? 'step-toolbar-button-focused' : ''}`}
+        icon={Sparkle}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        focusRing={focusedIndex === (selectedFlow ? 3 : 2) ? 'default' : 'none'}
         onClick={(e) => {
           e.stopPropagation();
           // TODO: Implement sparkle action
         }}
-        tabIndex={focusedIndex === (selectedFlow ? 2 : 1) ? 0 : -1}
+        tabIndex={focusedIndex === (selectedFlow ? 3 : 2) ? 0 : -1}
         title="Sparkle action"
         aria-label="Sparkle action"
-      >
-        <Sparkle size={16} className="step-toolbar-icon" />
-      </button>
+      />
 
-      <button
+      <Button
         ref={(el) => {
           const idx = getButtonIndex();
           buttonRefs.current[idx] = el;
         }}
-        className={`step-toolbar-button ${
-          isStepLoading(step.phase_id)
-            ? 'step-toolbar-button-disabled'
-            : focusedIndex === (selectedFlow ? 3 : 2)
-            ? 'step-toolbar-button-focused'
-            : ''
-        }`}
-        disabled={isStepLoading(step.phase_id)}
-        onClick={(e) => {
-          e.stopPropagation();
-          handleAddStepToRight();
-        }}
-        tabIndex={focusedIndex === (selectedFlow ? 3 : 2) ? 0 : -1}
-        title="Add step to the right"
-        aria-label="Add step to the right"
-      >
-        {isStepLoading(step.phase_id) ? (
-          <div className="step-toolbar-spinner" />
-        ) : (
-          <Plus size={16} className="step-toolbar-icon" />
-        )}
-      </button>
-
-      <button
-        ref={(el) => {
-          const idx = getButtonIndex();
-          buttonRefs.current[idx] = el;
-        }}
-        className={`step-toolbar-button ${
-          isSubjourneyLoading(step.id)
-            ? 'step-toolbar-button-disabled'
-            : focusedIndex === (selectedFlow ? 4 : 3)
-            ? 'step-toolbar-button-focused'
-            : ''
-        }`}
+        icon={ArrowDown}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        state={isSubjourneyLoading(step.id) ? 'loading' : 'default'}
+        focusRing={focusedIndex === (selectedFlow ? 4 : 3) ? 'default' : 'none'}
         disabled={isSubjourneyLoading(step.id)}
         onClick={(e) => {
           e.stopPropagation();
@@ -308,36 +336,41 @@ export function StepToolbar({ step, phaseColor }: StepToolbarProps) {
         tabIndex={focusedIndex === (selectedFlow ? 4 : 3) ? 0 : -1}
         title="Create subjourney"
         aria-label="Create subjourney"
-      >
-        {isSubjourneyLoading(step.id) ? (
-          <div className="step-toolbar-spinner" />
-        ) : (
-          <ArrowDown size={16} className="step-toolbar-icon" />
-        )}
-      </button>
+      />
 
-      <div className="step-toolbar-divider" />
-
-      <button
+      <Button
         ref={(el) => {
           const idx = getButtonIndex();
           buttonRefs.current[idx] = el;
         }}
-        className={`step-toolbar-button step-toolbar-button-danger ${
-          focusedIndex === (selectedFlow ? 5 : 4) ? 'step-toolbar-button-focused' : ''
-        }`}
+        icon={Plus}
+        iconOnly
+        size="sm"
+        variant="ghost"
+        borderRadius="var(--radius-sm)"
+        state={isStepLoading(step.phase_id) ? 'loading' : 'default'}
+        focusRing={focusedIndex === (selectedFlow ? 5 : 4) ? 'default' : 'none'}
+        disabled={isStepLoading(step.phase_id)}
         onClick={(e) => {
-          e.preventDefault();
           e.stopPropagation();
-          handleDeleteStep();
+          handleAddStepToRight();
         }}
-        onMouseDown={(e) => e.stopPropagation()}
         tabIndex={focusedIndex === (selectedFlow ? 5 : 4) ? 0 : -1}
-        title="Delete step"
-        aria-label="Delete step"
-      >
-        <Trash size={16} className="step-toolbar-icon-danger" />
-      </button>
+        title="Add step to the right"
+        aria-label="Add step to the right"
+      />
+
+      <DialogConfirm
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        title="Delete step?"
+        message="This step has attributes assigned. Are you sure you want to delete it?"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        confirmVariant="danger"
+      />
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DotsThree, PencilSimple, Trash, ArrowLeft, Plus } from '@phosphor-icons/react';
+import { DotsThree, PencilSimple, Trash, ArrowLeft, Plus, ListDashes } from '@phosphor-icons/react';
 import { ProjectCanvas } from '../components/canvas';
 // Note: Using direct Supabase queries for now
 import type { Project, Journey, Phase, Step } from '../types';
-import { Button, DropMenu, MenuListItem, DialogProject, DialogJourney, DialogConfirm } from '../components/ui';
+import { Button, DropMenu, MenuListItem, DialogProject, DialogJourney, DialogConfirm, DialogJourneyReorder } from '../components/ui';
 import { projectsApi, journeysApi } from '../api';
 
 /**
@@ -29,6 +29,7 @@ export function ProjectPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [createJourneyDialogOpen, setCreateJourneyDialogOpen] = useState(false);
   const [addJourneyDialogOpen, setAddJourneyDialogOpen] = useState(false);
+  const [reorderJourneysDialogOpen, setReorderJourneysDialogOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   // Load project data and journeys
@@ -362,9 +363,10 @@ export function ProjectPage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          pointerEvents: 'none',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', pointerEvents: 'auto' }}>
           <Button
             icon={ArrowLeft}
             iconPosition="left"
@@ -378,7 +380,7 @@ export function ProjectPage() {
             {displayProject.name}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', pointerEvents: 'auto' }}>
           {journeys.length > 0 && (
             <Button
               icon={Plus}
@@ -416,6 +418,19 @@ export function ProjectPage() {
             Edit Project
           </MenuListItem>
           <MenuListItem
+            icon={ListDashes}
+            iconPosition="left"
+            variant="ghost"
+            onClick={() => {
+              setMenuOpen(false);
+              setReorderJourneysDialogOpen(true);
+            }}
+            fullWidth
+            showBorder
+          >
+            Reorder Journeys
+          </MenuListItem>
+          <MenuListItem
             icon={Trash}
             iconPosition="left"
             variant="danger"
@@ -449,6 +464,43 @@ export function ProjectPage() {
         confirmLabel="Delete Project"
         cancelLabel="Cancel"
         confirmVariant="danger"
+      />
+
+      {/* Reorder Journeys Dialog */}
+      <DialogJourneyReorder
+        open={reorderJourneysDialogOpen}
+        onClose={() => setReorderJourneysDialogOpen(false)}
+        onReorder={async (journeyIds: string[]) => {
+          if (!projectId) return;
+          
+          // Update sequence_order for each journey (1-based indexing)
+          const { supabase } = await import('../lib/supabase');
+          const now = new Date().toISOString();
+          
+          for (let index = 0; index < journeyIds.length; index++) {
+            await supabase
+              .from('journeys')
+              .update({ 
+                sequence_order: index + 1,
+                updated_at: now 
+              })
+              .eq('id', journeyIds[index])
+              .eq('project_id', projectId)
+              .eq('is_subjourney', false);
+          }
+          
+          // Reload journeys to reflect new order
+          const { data: journeysData } = await supabase
+            .from('journeys')
+            .select('*')
+            .eq('project_id', projectId)
+            .order('created_at', { ascending: false });
+          
+          if (journeysData) {
+            setJourneys(journeysData);
+          }
+        }}
+        journeys={journeys}
       />
 
       {/* Create Journey Dialog (from ProjectSetupNode) */}

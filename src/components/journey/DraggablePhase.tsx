@@ -3,8 +3,7 @@
  * Phase with drag-and-drop reordering support
  */
 
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useSortable } from '@dnd-kit/react/sortable';
 import type { Phase, Step } from '../../types';
 import { PhaseComponent } from './PhaseComponent';
 
@@ -16,14 +15,7 @@ interface DraggablePhaseProps {
 }
 
 export function DraggablePhase({ phase, index, stepsWithSubjourneys, steps }: DraggablePhaseProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
+  const sortable = useSortable({
     id: phase.id,
     data: {
       type: 'phase',
@@ -32,14 +24,13 @@ export function DraggablePhase({ phase, index, stepsWithSubjourneys, steps }: Dr
     },
   });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div 
+      ref={sortable.ref} 
+      style={{
+        opacity: sortable.isDragging ? 0.5 : 1,
+      }}
+    >
       <PhaseComponent phase={phase} stepsWithSubjourneys={stepsWithSubjourneys} steps={steps} />
     </div>
   );

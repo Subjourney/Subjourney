@@ -16,7 +16,6 @@ import {
   type OnEdgesChange,
   type OnConnect,
   MiniMap,
-  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
@@ -67,7 +66,6 @@ function ProjectCanvasInner({
 }: ProjectCanvasInnerProps) {
   const { clearSelection, select } = useSelection();
   const navigate = useNavigate();
-  const reactFlow = useReactFlow();
 
   // Get default background dot color from CSS variable
   const defaultDotColor = useMemo(() => {
@@ -386,8 +384,8 @@ function ProjectCanvasInner({
     // Apply Dagre layout to parent journeys with zoom-compensated rank separation
     const layoutedParentNodes = applyDagreLayout(parentJourneyNodes, parentJourneyEdges, {
       direction: 'TB',
-      nodeSep: 50,
-      rankSep: 260, // Reduced vertical separation (zoom-compensated via data attributes)
+      nodeSep: 100,
+      rankSep: 100, // Reduced vertical separation between top-level journeys
       marginX,
       marginY,
       // For project canvas, rely on node.width/height only for stability
