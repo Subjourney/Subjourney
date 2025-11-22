@@ -52,6 +52,11 @@ interface AppStore extends SelectionState, UIState, DataState {
   setServiceBlueprintOpen: (open: boolean) => void;
   setDraggedBlueprintItem: (item: unknown | null) => void;
   setCenterWhenClicked: (enabled: boolean) => void;
+  // Canvas spacing actions
+  setCanvasNodeSep: (value: number) => void;
+  setCanvasRankSep: (value: number) => void;
+  setCanvasMainJourneySep: (value: number) => void;
+  setCanvasSpacingPanelMinimized: (minimized: boolean) => void;
 
   // Loading state actions
   setStepLoading: (stepId: EntityId, loading: boolean) => void;
@@ -123,6 +128,11 @@ export const useAppStore = create<AppStore>()(
       isServiceBlueprintOpen: false,
       draggedBlueprintItem: null,
       isCenterWhenClicked: false,
+      // Canvas spacing settings
+      canvasNodeSep: 60,
+      canvasRankSep: 150,
+      canvasMainJourneySep: 40,
+      canvasSpacingPanelMinimized: false,
 
       // Data state
       currentJourney: null,
@@ -436,6 +446,24 @@ export const useAppStore = create<AppStore>()(
 
       setCenterWhenClicked: (enabled) => {
         set({ isCenterWhenClicked: enabled });
+      },
+
+      // ===== CANVAS SPACING ACTIONS =====
+
+      setCanvasNodeSep: (value) => {
+        set({ canvasNodeSep: value });
+      },
+
+      setCanvasRankSep: (value) => {
+        set({ canvasRankSep: value });
+      },
+
+      setCanvasMainJourneySep: (value) => {
+        set({ canvasMainJourneySep: value });
+      },
+
+      setCanvasSpacingPanelMinimized: (minimized) => {
+        set({ canvasSpacingPanelMinimized: minimized });
       },
 
       // ===== LOADING STATE ACTIONS =====
@@ -985,6 +1013,11 @@ export const useAppStore = create<AppStore>()(
         editingActive: state.editingActive,
         disableHover: state.disableHover,
         isCenterWhenClicked: state.isCenterWhenClicked,
+        // Persist canvas spacing settings
+        canvasNodeSep: state.canvasNodeSep,
+        canvasRankSep: state.canvasRankSep,
+        canvasMainJourneySep: state.canvasMainJourneySep,
+        canvasSpacingPanelMinimized: state.canvasSpacingPanelMinimized,
         // Don't persist: collapsedSubjourneys, loading states, data (should be loaded from API)
       }),
       // Initialize Sets as empty on page load

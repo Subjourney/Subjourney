@@ -1,6 +1,6 @@
 /**
  * Journey Canvas Component
- * Main React Flow canvas for rendering journeys with Dagre layout
+ * Main React Flow canvas for rendering journeys with manual layout
  */
 
 import { useCallback, useEffect, useMemo, memo, useState, useRef } from 'react';
@@ -15,7 +15,7 @@ import {
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
-import { applyDagreLayout } from './layout';
+// Note: Dagre removed - using manual positioning
 import { JourneyNode } from './JourneyNode';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
 import { StepToSubjourneyEdge } from './StepToSubjourneyEdge';
@@ -210,7 +210,7 @@ function JourneyCanvasInner({
             }
           },
         },
-        position: { x: 0, y: 0 }, // Will be positioned by Dagre
+        position: { x: 0, y: 0 }, // Will be positioned manually
         width: 300,
         height: calculatedHeight,
       });
@@ -311,7 +311,7 @@ function JourneyCanvasInner({
       id: currentJourney.id,
       type: 'journey-node',
       data: { journey: currentJourney },
-      position: { x: 0, y: 0 }, // Will be positioned by Dagre
+      position: { x: 0, y: 0 }, // Will be positioned manually
     });
 
     // Subjourney nodes underneath the journey node (one for each subjourney, unfiltered)
@@ -395,137 +395,7 @@ function JourneyCanvasInner({
       });
     }
 
-    // Apply Dagre layout
-    const layouted = applyDagreLayout(flowNodes, flowEdges);
-
-    // Helper to read measured size via data attributes (zoom-compensated)
-    // For filtered nodes, prefer the node's height prop (calculated) over measured sizes
-    const getMeasuredSize = (node: Node, nodeId: string, fallbackWidth: number, fallbackHeight: number) => {
-      let width = node.width || fallbackWidth;
-      let height = node.height || fallbackHeight;
-      
-      // For filtered nodes (parent, next step, subjourney nodes), use the calculated height from node prop
-      // Only use measured size if node height is not set (fallback case)
-      if (nodeId.startsWith('parent-') || nodeId.startsWith('next-') || nodeId.startsWith('subjourneyNode-')) {
-        // Prefer node's calculated height, only measure if not set
-        if (!node.height) {
-          const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
-          if (el) {
-            const dw = parseInt(el.getAttribute('data-width') || '0', 10);
-            const dh = parseInt(el.getAttribute('data-height') || '0', 10);
-            if (dw > 0) width = dw;
-            if (dh > 0) height = dh;
-          }
-        }
-      } else {
-        // For journey node, prefer measured size (it uses updateNodeInternals)
-        const el = document.querySelector(`[data-journey-id="${nodeId}"]`) as HTMLElement | null;
-        if (el) {
-          const dw = parseInt(el.getAttribute('data-width') || '0', 10);
-          const dh = parseInt(el.getAttribute('data-height') || '0', 10);
-          if (dw > 0) width = dw;
-          if (dh > 0) height = dh;
-        }
-      }
-      return { width, height };
-    };
-
-    const journeyNode = layouted.nodes.find(n => n.id === currentJourney.id);
-
-    // Position parent journey overview node to the left of the main journey node
-    // and next step node to the right of the main journey node, using measured sizes
-    if (currentJourney.is_subjourney && parentJourney && journeyNode) {
-      const parentNodeId = `parent-${parentJourney.id}`;
-      const parentNode = layouted.nodes.find(n => n.id === parentNodeId);
-      
-      if (parentNode) {
-        // Get sizes (for filtered nodes, prefer calculated height from node prop)
-        const journeySize = getMeasuredSize(journeyNode, String(journeyNode.id), journeyNode.width || 400, journeyNode.height || 300);
-        const parentSize = getMeasuredSize(parentNode, String(parentNode.id), parentNode.width || 300, parentNode.height || 250);
-        
-        // Position parent node above journey node with gap
-        const verticalGap = 100;
-        const horizontalGap = 100; // For next step node positioning
-        parentNode.position = {
-          x: (journeyNode.position?.x || 0) + (journeySize.width / 2) - (parentSize.width / 2), // Horizontally center align
-          y: (journeyNode.position?.y || 0) - parentSize.height - verticalGap,
-        };
-
-        // Find and position next step node to the right of journey node
-        const parentSteps = parentJourney.allSteps || [];
-        const parentStep = parentSteps.find(step => step.id === currentJourney.parent_step_id);
-        
-        if (parentStep) {
-          // Sort all steps to find next step
-          const parentPhases = parentJourney.allPhases || [];
-          const sortedPhases = [...parentPhases].sort((a, b) => a.sequence_order - b.sequence_order);
-          const allStepsSorted: typeof parentSteps = [];
-          sortedPhases.forEach((phase) => {
-            const phaseSteps = parentSteps
-              .filter(step => step.phase_id === phase.id)
-              .sort((a, b) => a.sequence_order - b.sequence_order);
-            allStepsSorted.push(...phaseSteps);
-          });
-
-          const parentStepIndex = allStepsSorted.findIndex(step => step.id === currentJourney.parent_step_id);
-          
-          if (parentStepIndex >= 0 && parentStepIndex < allStepsSorted.length - 1) {
-            const nextStep = allStepsSorted[parentStepIndex + 1];
-            const nextNodeId = `next-${parentJourney.id}-${nextStep.id}`;
-            const nextNode = layouted.nodes.find(n => n.id === nextNodeId);
-            
-            if (nextNode) {
-              const nextSize = getMeasuredSize(nextNode, String(nextNode.id), nextNode.width || 300, nextNode.height || 250);
-              
-              // Position next step node to the right of journey node with gap
-              nextNode.position = {
-                x: (journeyNode.position?.x || 0) + journeySize.width + horizontalGap,
-                y: (journeyNode.position?.y || 0) + (journeySize.height / 2) - (nextSize.height / 2), // Vertically center align
-              };
-            }
-          }
-        }
-      }
-    }
-
-    // Position subjourney nodes (children) in a centered row underneath the journey node
-    // Use fixed widths so layout is stable across navigations and does not depend on DOM timing
-    if (journeyNode && currentJourney.subjourneys && currentJourney.subjourneys.length > 0) {
-      const subjourneys = currentJourney.subjourneys;
-      const subNodeWidth = 300; // matches width used when creating subjourney nodes
-
-      if (subjourneys.length > 0) {
-        const verticalGap = 100;
-        const subHorizontalGap = 40;
-        const totalWidth =
-          subjourneys.length * subNodeWidth +
-          subHorizontalGap * (subjourneys.length - 1);
-
-        const journeySize = getMeasuredSize(
-          journeyNode,
-          String(journeyNode.id),
-          journeyNode.width || 400,
-          journeyNode.height || 300
-        );
-        const journeyCenterX = (journeyNode.position?.x || 0) + journeySize.width / 2;
-        let currentX = journeyCenterX - totalWidth / 2;
-        const baseY = (journeyNode.position?.y || 0) + journeySize.height + verticalGap;
-
-        subjourneys.forEach((subjourney) => {
-          const subNodeId = `subjourneyNode-${subjourney.id}`;
-          const subNode = layouted.nodes.find((n) => n.id === subNodeId);
-          if (subNode) {
-            subNode.position = {
-              x: currentX,
-              y: baseY,
-            };
-            currentX += subNodeWidth + subHorizontalGap;
-          }
-        });
-      }
-    }
-    
-    return layouted;
+    return { nodes: flowNodes, edges: flowEdges };
   }, [currentJourney, parentJourney]);
 
   // Whenever we load a new journey, show the canvas overlay again

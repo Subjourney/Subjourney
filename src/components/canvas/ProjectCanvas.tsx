@@ -3,7 +3,7 @@
  * Main React Flow canvas for rendering journey overview nodes directly
  */
 
-import { useCallback, useMemo, memo } from 'react';
+import { useCallback, useMemo, memo, useState, useEffect } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -21,8 +21,8 @@ import '@xyflow/react/dist/base.css';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
 import { ProjectSetupNode } from './ProjectSetupNode';
 import { StepToSubjourneyEdge } from './StepToSubjourneyEdge';
-import { applyDagreLayout } from './layout';
-import { useSelection } from '../../store';
+import { applyElkLayout } from './layout';
+import { useSelection, useAppStore } from '../../store';
 import type { Project, Journey, Phase, Step } from '../../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -67,6 +67,18 @@ function ProjectCanvasInner({
   const { clearSelection, select } = useSelection();
   const navigate = useNavigate();
 
+  // Get spacing controls from Zustand store
+  const {
+    canvasNodeSep: nodeSep,
+    canvasRankSep: rankSep,
+    canvasMainJourneySep: mainJourneySep,
+    canvasSpacingPanelMinimized: isMinimized,
+    setCanvasNodeSep: setNodeSep,
+    setCanvasRankSep: setRankSep,
+    setCanvasMainJourneySep: setMainJourneySep,
+    setCanvasSpacingPanelMinimized: setIsMinimized,
+  } = useAppStore();
+
   // Get default background dot color from CSS variable
   const defaultDotColor = useMemo(() => {
     if (typeof window !== 'undefined') {
@@ -89,7 +101,142 @@ function ProjectCanvasInner({
     [select, onJourneyClick, navigate, teamSlug, project.id]
   );
 
-  const { nodes, edges } = useMemo(() => {
+  // Helper function to add spacing between rows (main journey + all its descendants)
+  // Each row consists of a main journey and all its subjourneys at any level
+  // This ensures proper spacing between complete journey hierarchies
+  const addSpacingBetweenRows = useCallback((
+    layoutedNodes: Node[],
+    allJourneys: Journey[],
+    extraSpacing: number
+  ): Node[] => {
+    if (extraSpacing <= 0) return layoutedNodes;
+
+    // Build maps for quick lookups
+    const journeyMap = new Map<string, Journey>();
+    allJourneys.forEach(j => journeyMap.set(j.id, j));
+
+    // Build stepIdToJourneyId map
+    const stepIdToJourneyId = new Map<string, string>();
+    journeys.forEach((journey) => {
+      const phases = journeyPhases[journey.id] || [];
+      phases.forEach((phase) => {
+        const steps = phaseSteps[phase.id] || [];
+        steps.forEach((step) => {
+          stepIdToJourneyId.set(step.id, journey.id);
+        });
+      });
+    });
+
+    // Find all main journeys (top-level)
+    const mainJourneys = allJourneys.filter(j => !j.is_subjourney);
+    
+    // For each main journey, find ALL its descendant nodes (including itself)
+    const findDescendants = (mainJourneyId: string): Node[] => {
+      const descendants: Node[] = [];
+      
+      // Add the main journey node itself
+      const mainNode = layoutedNodes.find(n => n.id === mainJourneyId);
+      if (mainNode) {
+        descendants.push(mainNode);
+      }
+      
+      // Recursively find all subjourneys
+      const findSubjourneys = (targetParentJourneyId: string) => {
+        allJourneys.forEach(journey => {
+          if (journey.is_subjourney && journey.parent_step_id) {
+            const journeyParentId = stepIdToJourneyId.get(journey.parent_step_id);
+            if (journeyParentId === targetParentJourneyId) {
+              const node = layoutedNodes.find(n => n.id === journey.id);
+              if (node) {
+                descendants.push(node);
+                // Recursively find subjourneys of this subjourney
+                findSubjourneys(journey.id);
+              }
+            }
+          }
+        });
+      };
+      
+      findSubjourneys(mainJourneyId);
+      return descendants;
+    };
+
+    // Build rows: each row contains a main journey and all its descendants
+    const rows = mainJourneys
+      .sort((a, b) => {
+        const orderA = a.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        const orderB = b.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      })
+      .map(mainJourney => ({
+        mainJourneyId: mainJourney.id,
+        nodes: findDescendants(mainJourney.id),
+      }))
+      .filter(row => row.nodes.length > 0);
+
+    if (rows.length <= 1) return layoutedNodes;
+
+    // Sort rows by the topmost Y position
+    const sortedRows = rows.sort((a, b) => {
+      const topA = Math.min(...a.nodes.map(n => n.position?.y || 0));
+      const topB = Math.min(...b.nodes.map(n => n.position?.y || 0));
+      return topA - topB;
+    });
+
+    // Add extra spacing between rows
+    const result = layoutedNodes.map(n => ({ ...n }));
+    let cumulativeOffset = 0;
+
+    for (let i = 0; i < sortedRows.length - 1; i++) {
+      const currentRow = sortedRows[i];
+      const nextRow = sortedRows[i + 1];
+
+      // Find bottom of current row (bottom-most node in the entire hierarchy)
+      const bottomOfCurrent = Math.max(
+        ...currentRow.nodes.map(n => {
+          const node = result.find(r => r.id === n.id);
+          return (node?.position?.y || 0) + (node?.height || 250);
+        })
+      );
+
+      // Find top of next row (top-most node in the next hierarchy)
+      const topOfNext = Math.min(
+        ...nextRow.nodes.map(n => {
+          const node = result.find(r => r.id === n.id);
+          return node?.position?.y || 0;
+        })
+      );
+
+      // Calculate how much space to add
+      const currentGap = topOfNext - bottomOfCurrent;
+      const spaceToAdd = Math.max(0, extraSpacing - currentGap);
+      
+      if (spaceToAdd > 0) {
+        cumulativeOffset += spaceToAdd;
+
+        // Shift all nodes in next row and all subsequent rows down
+        for (let j = i + 1; j < sortedRows.length; j++) {
+          sortedRows[j].nodes.forEach(node => {
+            const nodeIndex = result.findIndex(n => n.id === node.id);
+            if (nodeIndex >= 0) {
+              result[nodeIndex] = {
+                ...result[nodeIndex],
+                position: {
+                  ...result[nodeIndex].position!,
+                  y: (result[nodeIndex].position?.y || 0) + cumulativeOffset,
+                },
+              };
+            }
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [journeys, journeyPhases, phaseSteps]);
+
+  // Create nodes and edges structure
+  const { nodes: rawNodes, edges } = useMemo(() => {
     const flowNodes: Node[] = [];
     const flowEdges: Edge[] = [];
 
@@ -102,7 +249,7 @@ function ProjectCanvasInner({
           onImportJourney,
           onCreateJourney,
         },
-        position: { x: 0, y: 0 }, // Will be positioned by Dagre
+        position: { x: 0, y: 0 }, // Will be positioned manually
         width: 400,
         height: 200,
       };
@@ -158,7 +305,7 @@ function ProjectCanvasInner({
           onPhaseClick,
           onStepClick,
         },
-        position: { x: 0, y: 0 }, // Will be positioned by Dagre
+        position: { x: 0, y: 0 }, // Will be positioned manually
         width: 300,
         height: calculatedHeight,
       };
@@ -209,9 +356,15 @@ function ProjectCanvasInner({
       journeyStepsMap.set(journey.id, allSteps);
     });
 
-    // Get parent journeys list for finding next journey (sorted deterministically by name then id)
+    // Get parent journeys list for finding next journey (sorted by sequence_order)
     const parentJourneys = journeys.filter((j) => !j.is_subjourney);
     const parentJourneysSorted = [...parentJourneys].sort((a, b) => {
+      const orderA = a.sequence_order ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.sequence_order ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      // Fallback to name then id for deterministic ordering when sequence_order is the same
       const byName = (a.name || '').localeCompare(b.name || '');
       if (byName !== 0) return byName;
       return String(a.id).localeCompare(String(b.id));
@@ -336,130 +489,139 @@ function ProjectCanvasInner({
       });
     }
 
-    // ---- Custom layout: place subjourneys to the right of their parent and stack vertically ----
-    // Build quick lookup for nodes by journey id
-    const nodeById = new Map<string, Node>();
-    flowNodes.forEach((n) => nodeById.set(n.id, n));
-
-    // Group subjourney nodes by their parent journey id, keeping the parent step order
-    const parentToSubNodes = new Map<string, Array<{ node: Node; parentStepIndex: number }>>();
-    journeys.forEach((j) => {
-      if (j.is_subjourney && j.parent_step_id) {
-        const parentJourneyId = stepIdToJourneyId.get(j.parent_step_id);
-        if (parentJourneyId) {
-          const subNode = nodeById.get(j.id);
-          if (subNode) {
-            const parentSteps = journeyStepsMap.get(parentJourneyId) || [];
-            const idx = parentSteps.findIndex((s) => s.id === j.parent_step_id);
-            const arr = parentToSubNodes.get(parentJourneyId) || [];
-            arr.push({ node: subNode, parentStepIndex: idx >= 0 ? idx : Number.MAX_SAFE_INTEGER });
-            parentToSubNodes.set(parentJourneyId, arr);
-          }
-        }
+    // Helper function to get the parent step's sequence_order for a subjourney
+    const getParentStepSequenceOrder = (subjourney: Journey): number => {
+      if (!subjourney.is_subjourney || !subjourney.parent_step_id) {
+        return Number.MAX_SAFE_INTEGER;
       }
+      
+      const parentJourneyId = stepIdToJourneyId.get(subjourney.parent_step_id);
+      if (!parentJourneyId) {
+        return Number.MAX_SAFE_INTEGER;
+      }
+      
+      const parentSteps = journeyStepsMap.get(parentJourneyId) || [];
+      const parentStep = parentSteps.find(step => step.id === subjourney.parent_step_id);
+      
+      if (!parentStep) {
+        return Number.MAX_SAFE_INTEGER;
+      }
+      
+      // Get the index of the parent step in the sorted steps array
+      // This represents the sequence_order within the parent journey
+      const parentStepIndex = parentSteps.findIndex(step => step.id === subjourney.parent_step_id);
+      return parentStepIndex >= 0 ? parentStepIndex : Number.MAX_SAFE_INTEGER;
+    };
+
+    // Sort nodes so that:
+    // 1. Top-level journeys are ordered by sequence_order (lowest first)
+    // 2. Subjourneys are ordered by their parent step's sequence_order (lowest first)
+    // This ensures correct ordering in all columns
+    const sortedNodes = [...flowNodes].sort((a, b) => {
+      const journeyA = journeys.find(j => j.id === a.id);
+      const journeyB = journeys.find(j => j.id === b.id);
+      
+      if (!journeyA || !journeyB) {
+        return 0;
+      }
+      
+      // Both are top-level journeys - sort by sequence_order
+      if (!journeyA.is_subjourney && !journeyB.is_subjourney) {
+        const orderA = journeyA.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        const orderB = journeyB.sequence_order ?? Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        // If sequence_order is the same, fall back to name then id
+        const byName = (journeyA.name || '').localeCompare(journeyB.name || '');
+        if (byName !== 0) return byName;
+        return String(journeyA.id).localeCompare(String(journeyB.id));
+      }
+      
+      // Top-level journeys come before subjourneys
+      if (!journeyA.is_subjourney && journeyB.is_subjourney) {
+        return -1;
+      }
+      if (journeyA.is_subjourney && !journeyB.is_subjourney) {
+        return 1;
+      }
+      
+      // Both are subjourneys - sort by their parent step's sequence_order
+      if (journeyA.is_subjourney && journeyB.is_subjourney) {
+        const orderA = getParentStepSequenceOrder(journeyA);
+        const orderB = getParentStepSequenceOrder(journeyB);
+        
+        // Sort by parent step's sequence_order (lower index = earlier step = higher in column)
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        
+        // If same parent step sequence_order, check if they have the same parent journey
+        // If different parents, maintain relative order (ELK will place them in different columns)
+        const parentJourneyIdA = stepIdToJourneyId.get(journeyA.parent_step_id || '');
+        const parentJourneyIdB = stepIdToJourneyId.get(journeyB.parent_step_id || '');
+        
+        if (parentJourneyIdA !== parentJourneyIdB) {
+          // Different parents - maintain relative order, ELK will handle column placement
+          return 0;
+        }
+        
+        // Same parent and same step order - fall back to name then id for deterministic ordering
+        const byName = (journeyA.name || '').localeCompare(journeyB.name || '');
+        if (byName !== 0) return byName;
+        return String(journeyA.id).localeCompare(String(journeyB.id));
+      }
+      
+      return 0;
     });
 
-    // Layout params - reduced vertical spacing
-    const marginX = 50;
-    const marginY = 50;
-    const horizontalGap = 100;
-    const verticalGap = 60; // Reduced from 40
+    return { nodes: sortedNodes, edges: flowEdges };
+  }, [journeys, journeyPhases, phaseSteps, handleJourneyClick, onPhaseClick, onStepClick, project.id, onImportJourney, onCreateJourney]);
 
-    // Use Dagre layout for parent journeys (zoom-compensated rank separation)
-    // Create temporary edges between parent journeys for Dagre layout
-    const parentJourneyEdges: Edge[] = [];
-    for (let i = 0; i < parentJourneysSorted.length - 1; i++) {
-      parentJourneyEdges.push({
-        id: `temp-edge-${parentJourneysSorted[i].id}-${parentJourneysSorted[i + 1].id}`,
-        source: parentJourneysSorted[i].id,
-        target: parentJourneysSorted[i + 1].id,
-      });
+  // Apply ELK.js layout to nodes
+  const [nodes, setNodes] = useState<Node[]>([]);
+
+  useEffect(() => {
+    if (rawNodes.length === 0) {
+      setNodes([]);
+      return;
     }
 
-    // Get parent journey nodes only
-    const parentJourneyNodes = parentJourneysSorted
-      .map((j) => nodeById.get(j.id))
-      .filter((n): n is Node => n !== undefined);
-
-    // Apply Dagre layout to parent journeys with zoom-compensated rank separation
-    const layoutedParentNodes = applyDagreLayout(parentJourneyNodes, parentJourneyEdges, {
-      direction: 'TB',
-      nodeSep: 100,
-      rankSep: 100, // Reduced vertical separation between top-level journeys
-      marginX,
-      marginY,
-      // For project canvas, rely on node.width/height only for stability
-      preferDomMeasurements: false,
+    // Apply ELK layout - Left to Right hierarchical layout
+    // Filter edges to only use hierarchy edges (parent journey to subjourney) for layout
+    // This ensures proper column structure: top-level journeys on left, subjourneys to the right
+    // We only use the parent-child edges, not continuation or sequential edges for layout
+    const hierarchyEdges = edges.filter((edge) => {
+      // Include edges that connect parent journeys to their subjourneys
+      return edge.type === 'step-to-subjourney' || 
+             (edge.id.startsWith('edge-step-') && edge.id.includes('-subjourney-'));
     });
 
-    // Update parent node positions from Dagre layout
-    layoutedParentNodes.nodes.forEach((layoutedNode) => {
-      const originalNode = nodeById.get(layoutedNode.id);
-      if (originalNode) {
-        originalNode.position = layoutedNode.position;
-      }
-    });
-
-    // Helper function: get size from node props only (no DOM)
-    const getNodeSize = (node: Node): { width: number; height: number } => {
-      return {
-        width: node.width || 300,
-        height: node.height || 250,
-      };
-    };
-
-    // Recursive positioning of subjourneys for any parent (supports nested subjourneys)
-    const positionSubjourneysRecursive = (parentNode: Node, parentJourneyId: string) => {
-      const parentSize = getNodeSize(parentNode);
-      const subNodesWithIndex = parentToSubNodes.get(parentJourneyId) || [];
-      if (subNodesWithIndex.length === 0) return;
-
-      // Sort subjourneys by their parent step's order
-      const sortedSubNodes = [...subNodesWithIndex].sort((a, b) => a.parentStepIndex - b.parentStepIndex);
-
-      // X position for direct children of this parent
-      const parentRightX = (parentNode.position?.x || 0) + parentSize.width;
-
-      // Compute total height of subjourney stack to center relative to this parent (using measured sizes)
-      const subsTotalHeightForCentering =
-        sortedSubNodes.reduce(
-          (sum, { node: sn }, idx) => {
-            const subSize = getNodeSize(sn);
-            return sum + subSize.height + (idx > 0 ? verticalGap : 0);
-          },
-          0
-        ) || 0;
-
-      const parentCenterY = (parentNode.position?.y || 0) + parentSize.height / 2;
-      let subCurrentY =
-        subsTotalHeightForCentering > 0
-          ? parentCenterY - subsTotalHeightForCentering / 2
-          : (parentNode.position?.y || 0);
-
-      // Place direct children
-      sortedSubNodes.forEach(({ node: sn }) => {
-        const subSize = getNodeSize(sn);
-        sn.position = {
-          x: parentRightX + horizontalGap,
-          y: subCurrentY,
-        };
-        subCurrentY += subSize.height + verticalGap;
-
-        // Recurse to place grandchildren to the right of this subjourney
-        positionSubjourneysRecursive(sn, String(sn.id));
+    applyElkLayout(rawNodes, hierarchyEdges, {
+      direction: 'LR', // Left to Right
+      nodeSep, // Vertical spacing between nodes in same column
+      rankSep, // Horizontal spacing between columns (levels)
+      marginX: 50,
+      marginY: 50,
+      preferDomMeasurements: false, // Use node.width/height for stability
+    })
+      .then((layouted) => {
+        // Post-process: Add extra vertical spacing between rows
+        // Each row consists of a main journey and all its descendants (subjourneys at any level)
+        // This ensures proper spacing between complete journey hierarchies
+        const processedNodes = addSpacingBetweenRows(
+          layouted.nodes,
+          journeys,
+          mainJourneySep
+        );
+        setNodes(processedNodes);
+      })
+      .catch((error) => {
+        console.error('ELK layout error:', error);
+        // Fallback to raw nodes if layout fails
+        setNodes(rawNodes);
       });
-    };
-
-    // Position subjourneys for each top-level parent; recursion handles deeper levels
-    parentJourneysSorted.forEach((parent) => {
-      const parentNode = nodeById.get(parent.id);
-      if (parentNode) {
-        positionSubjourneysRecursive(parentNode, parent.id);
-      }
-    });
-
-    return { nodes: flowNodes, edges: flowEdges };
-  }, [journeys, journeyPhases, phaseSteps, handleJourneyClick, onPhaseClick, onStepClick, project.id, onImportJourney, onCreateJourney]);
+  }, [rawNodes, edges, nodeSep, rankSep, mainJourneySep, journeys, addSpacingBetweenRows]);
 
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
@@ -521,6 +683,176 @@ function ProjectCanvasInner({
       <Background color={backgroundDotColor || defaultDotColor} />
       <Controls />
       <MiniMap></MiniMap>
+      
+      {/* Spacing Control Panel - Bottom Left (next to React Flow controls) */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '60px', // Position to the right of React Flow controls (which are typically ~40px wide)
+          background: 'var(--surface-2)',
+          border: 'var(--border-default)',
+          borderRadius: 'var(--radius-lg)',
+          padding: isMinimized ? '8px 8px 8px 8px' : '12px 12px 12px 12px',
+          paddingTop: isMinimized ? '24px' : '28px', // Extra space at top for collapse icon
+          boxShadow: 'var(--shadow-md)',
+          zIndex: 10,
+          minWidth: isMinimized ? '180px' : '220px',
+        }}
+      >
+        {/* Minimize/Maximize Button */}
+        <button
+          onClick={() => setIsMinimized(!isMinimized)}
+          style={{
+            position: 'absolute',
+            top: '4px',
+            right: '4px',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px',
+            fontSize: '12px',
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--surface-3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+          title={isMinimized ? 'Expand' : 'Minimize'}
+        >
+          {isMinimized ? '▼' : '▲'}
+        </button>
+
+        <div style={{ marginBottom: isMinimized ? '6px' : '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isMinimized ? (
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                minWidth: '12px',
+              }}
+            >
+              y
+            </span>
+          ) : (
+            <label
+              htmlFor="nodeSep-slider"
+              style={{
+                display: 'block',
+                marginBottom: '4px',
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+              }}
+            >
+              Vertical: {nodeSep}px
+            </label>
+          )}
+          <input
+            id="nodeSep-slider"
+            type="range"
+            min="20"
+            max="200"
+            step="10"
+            value={nodeSep}
+            onChange={(e) => setNodeSep(Number(e.target.value))}
+            style={{
+              width: '100%',
+              cursor: 'pointer',
+              height: '4px',
+            }}
+          />
+        </div>
+        <div style={{ marginBottom: isMinimized ? '6px' : '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isMinimized ? (
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                minWidth: '12px',
+              }}
+            >
+              x
+            </span>
+          ) : (
+            <label
+              htmlFor="rankSep-slider"
+              style={{
+                display: 'block',
+                marginBottom: '4px',
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+              }}
+            >
+              Horizontal: {rankSep}px
+            </label>
+          )}
+          <input
+            id="rankSep-slider"
+            type="range"
+            min="50"
+            max="400"
+            step="10"
+            value={rankSep}
+            onChange={(e) => setRankSep(Number(e.target.value))}
+            style={{
+              width: '100%',
+              cursor: 'pointer',
+              height: '4px',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {isMinimized ? (
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                minWidth: '12px',
+              }}
+            >
+              r
+            </span>
+          ) : (
+            <label
+              htmlFor="mainJourneySep-slider"
+              style={{
+                display: 'block',
+                marginBottom: '4px',
+                fontSize: '12px',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+              }}
+            >
+              Row Gap: {mainJourneySep}px
+            </label>
+          )}
+          <input
+            id="mainJourneySep-slider"
+            type="range"
+            min="40"
+            max="800"
+            step="20"
+            value={mainJourneySep}
+            onChange={(e) => setMainJourneySep(Number(e.target.value))}
+            style={{
+              width: '100%',
+              cursor: 'pointer',
+              height: '4px',
+            }}
+          />
+        </div>
+      </div>
     </ReactFlow>
   );
 }

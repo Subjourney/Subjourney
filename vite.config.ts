@@ -17,5 +17,13 @@ export default defineConfig(() => {
         },
       }),
     ],
+    optimizeDeps: {
+      exclude: ['web-worker'], // Exclude web-worker from optimization since we're using bundled ELK
+    },
+    build: {
+      commonjsOptions: {
+        transformMixedEsModules: true,
+      },
+    },
   }
 })
