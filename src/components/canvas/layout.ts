@@ -17,7 +17,7 @@ export interface LayoutOptions {
   nodeSequenceOrder?: Map<string, number>; // Map of node ID to sequence_order for enforcing order
 }
 
-const DEFAULT_OPTIONS: Required<Omit<LayoutOptions, 'rowSep'>> & { rowSep?: number } = {
+const DEFAULT_OPTIONS: Required<Omit<LayoutOptions, 'rowSep' | 'nodeSequenceOrder'>> & { rowSep?: number; nodeSequenceOrder?: Map<string, number> } = {
   direction: 'TB',
   nodeSep: 50,
   rankSep: 100,

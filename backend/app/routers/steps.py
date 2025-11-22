@@ -243,8 +243,20 @@ async def delete_step(step_id: str, current_user: dict = Depends(get_current_use
         if not membership.data:
             raise HTTPException(status_code=403, detail="Access denied")
         
-        # Get phase_id before deletion for reordering
+        # Get phase_id and journey_id before deletion for reordering and continue_step_id updates
         phase_id = step_result.data[0].get("phase_id")
+        journey_id = phase.get("journey_id")
+        
+        # Check if any subjourneys have this step as their continue_step_id
+        # If so, we'll need to recompute their continue_step_id after deletion
+        affected_subjourneys_result = (
+            supabase.table("journeys")
+            .select("id")
+            .eq("is_subjourney", True)
+            .eq("continue_step_id", step_id)
+            .execute()
+        )
+        affected_subjourney_ids = [sj["id"] for sj in (affected_subjourneys_result.data or [])]
         
         # Delete step
         supabase.table("steps").delete().eq("id", step_id).execute()
@@ -265,6 +277,47 @@ async def delete_step(step_id: str, current_user: dict = Depends(get_current_use
                 supabase.table("steps").update(
                     {"sequence_order": index + 1, "updated_at": now}
                 ).eq("id", remaining_step_id).eq("phase_id", phase_id).execute()
+        
+        # Update continue_step_id for the journey (in case step order changed)
+        if journey_id:
+            from .journeys import _update_continue_step_ids_for_journey
+            _update_continue_step_ids_for_journey(supabase, journey_id)
+        
+        # For subjourneys that had this step as continue_step_id, recompute it
+        # by updating their parent journey's continue_step_ids
+        if affected_subjourney_ids:
+            # Get parent journeys for these subjourneys
+            for subjourney_id in affected_subjourney_ids:
+                subjourney_result = (
+                    supabase.table("journeys")
+                    .select("parent_step_id")
+                    .eq("id", subjourney_id)
+                    .execute()
+                )
+                if subjourney_result.data:
+                    parent_step_id = subjourney_result.data[0].get("parent_step_id")
+                    if parent_step_id:
+                        # Get parent step's phase and journey
+                        parent_step_result = (
+                            supabase.table("steps")
+                            .select("phase_id")
+                            .eq("id", parent_step_id)
+                            .execute()
+                        )
+                        if parent_step_result.data:
+                            parent_phase_id = parent_step_result.data[0].get("phase_id")
+                            if parent_phase_id:
+                                parent_phase_result = (
+                                    supabase.table("phases")
+                                    .select("journey_id")
+                                    .eq("id", parent_phase_id)
+                                    .execute()
+                                )
+                                if parent_phase_result.data:
+                                    parent_journey_id = parent_phase_result.data[0].get("journey_id")
+                                    if parent_journey_id:
+                                        from .journeys import _update_continue_step_ids_for_journey
+                                        _update_continue_step_ids_for_journey(supabase, parent_journey_id)
         
         return {"message": "Step deleted successfully"}
     except HTTPException:
@@ -365,6 +418,34 @@ async def move_step_to_phase(
                     supabase.table("steps").update(
                         {"sequence_order": idx + 1, "updated_at": now}
                     ).eq("id", s["id"]).eq("phase_id", source_phase_id).execute()
+
+        # Update continue_step_id for affected journeys
+        # Get journey_id from target phase
+        target_phase_result = (
+            supabase.table("phases")
+            .select("journey_id")
+            .eq("id", payload.phase_id)
+            .execute()
+        )
+        if target_phase_result.data:
+            target_journey_id = target_phase_result.data[0].get("journey_id")
+            if target_journey_id:
+                from .journeys import _update_continue_step_ids_for_journey
+                _update_continue_step_ids_for_journey(supabase, target_journey_id)
+        
+        # Also update source journey if different
+        if source_phase_id and source_phase_id != payload.phase_id:
+            source_phase_result = (
+                supabase.table("phases")
+                .select("journey_id")
+                .eq("id", source_phase_id)
+                .execute()
+            )
+            if source_phase_result.data:
+                source_journey_id = source_phase_result.data[0].get("journey_id")
+                if source_journey_id and source_journey_id != target_journey_id:
+                    from .journeys import _update_continue_step_ids_for_journey
+                    _update_continue_step_ids_for_journey(supabase, source_journey_id)
 
         return {"message": "Step moved successfully"}
     except HTTPException:

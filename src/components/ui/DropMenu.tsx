@@ -3,10 +3,9 @@
  * Dropdown menu using react-popper for positioning
  */
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { usePopper } from 'react-popper';
-import { MenuListItem } from './MenuListItem';
 
 export interface DropMenuProps {
   /** Reference to the anchor element that triggers the menu */
@@ -29,9 +28,10 @@ export function DropMenu({
   onClose,
   children,
   placement = 'bottom-start',
-  offset = [0, 8],
+  offset = [0, 16],
 }: DropMenuProps) {
   const [popperElement, setPopperElement] = useState<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const popperModifiers = useMemo(
     () => [
@@ -55,15 +55,36 @@ export function DropMenu({
     [offset]
   );
 
-  const { styles, attributes } = usePopper(anchorRef.current, popperElement, {
+  const { styles, attributes } = usePopper(
+    open && mounted ? anchorRef.current : null,
+    popperElement,
+    {
     placement,
     strategy: 'fixed',
     modifiers: popperModifiers,
-  });
+    }
+  );
+
+  // Handle mounting/unmounting to prevent cleanup race conditions
+  useEffect(() => {
+    if (open) {
+      // Mount on next frame to ensure DOM is ready
+      const rafId = requestAnimationFrame(() => {
+        setMounted(true);
+      });
+      return () => cancelAnimationFrame(rafId);
+    } else {
+      // Unmount after a brief delay to allow React to clean up
+      const timeoutId = setTimeout(() => {
+        setMounted(false);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [open]);
 
   // Close menu on outside click
   useEffect(() => {
-    if (!open) return;
+    if (!open || !mounted) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -89,9 +110,9 @@ export function DropMenu({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [open, popperElement, anchorRef, onClose]);
+  }, [open, mounted, popperElement, anchorRef, onClose]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   const menuStyle: React.CSSProperties = {
     ...styles.popper,
@@ -104,7 +125,7 @@ export function DropMenu({
     borderRadius: 'var(--radius-md)',
     padding: 'var(--spacing-xs)',
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-    display: 'flex',
+    display: open ? 'flex' : 'none',
     flexDirection: 'column',
   };
 

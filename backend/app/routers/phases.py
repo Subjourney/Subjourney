@@ -311,6 +311,12 @@ async def reorder_steps(
                 {"sequence_order": index + 1, "updated_at": now}
             ).eq("id", step_id).eq("phase_id", phase_id).execute()
 
+        # Update continue_step_id for all subjourneys of this journey
+        journey_id = phase_result.data[0].get("journey_id")
+        if journey_id:
+            from .journeys import _update_continue_step_ids_for_journey
+            _update_continue_step_ids_for_journey(supabase, journey_id)
+
         return {"message": "Steps reordered successfully"}
     except HTTPException:
         raise

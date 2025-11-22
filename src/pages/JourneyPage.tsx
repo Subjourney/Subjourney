@@ -7,6 +7,7 @@ import { signOut } from '../lib/auth';
 import { journeysApi } from '../api';
 import { useAppStore } from '../store';
 import { useSelection } from '../store/hooks';
+import { supabase } from '../lib/supabase';
 import type { Journey } from '../types';
 import { Button, DropMenu, MenuListItem, DialogConfirm } from '../components/ui';
 
@@ -95,7 +96,38 @@ export function JourneyPage() {
 
     try {
       await journeysApi.deleteJourney(journeyId);
-      // Navigate to project page after successful deletion
+      
+      // If this is a subjourney, navigate to its parent journey
+      if (journey.is_subjourney && journey.parent_step_id) {
+        try {
+          // Get the step to find its phase
+          const { data: step, error: stepError } = await supabase
+            .from('steps')
+            .select('phase_id')
+            .eq('id', journey.parent_step_id)
+            .single();
+          
+          if (!stepError && step) {
+            // Get the phase to find its journey (parent journey)
+            const { data: phase, error: phaseError } = await supabase
+              .from('phases')
+              .select('journey_id')
+              .eq('id', step.phase_id)
+              .single();
+            
+            if (!phaseError && phase && teamSlug && projectId) {
+              // Navigate to parent journey
+              navigate(`/${teamSlug}/project/${projectId}/journey/${phase.journey_id}`);
+              return;
+            }
+          }
+        } catch (parentError) {
+          console.error('Error finding parent journey:', parentError);
+          // Fall through to project navigation
+        }
+      }
+      
+      // Navigate to project page after successful deletion (for top-level journeys or if parent lookup failed)
       navigate(teamSlug && projectId ? `/${teamSlug}/project/${projectId}` : '/');
     } catch (error) {
       console.error('Error deleting journey:', error);
@@ -157,14 +189,11 @@ export function JourneyPage() {
           >
             Back to Project
           </Button>
-          <div style={{ color: 'var(--color-text-primary)', fontSize: 'var(--font-size-base)' }}>
+          <div style={{ color: 'var(--color-text-primary)', fontSize: 'var(--font-size-base)', fontWeight: 'semibold' }}>
             {journey?.name || `Journey ${journeyId}`}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', pointerEvents: 'auto' }}>
-          <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-            {user?.email}
-          </div>
           <Button
             ref={menuButtonRef}
             icon={DotsThree}
@@ -174,15 +203,6 @@ export function JourneyPage() {
             size="md"
             onClick={() => setMenuOpen(!menuOpen)}
           />
-          <Button
-            icon={SignOut}
-            iconPosition="left"
-            variant="secondary"
-            size="sm"
-            onClick={handleSignOut}
-          >
-            Sign Out
-          </Button>
         </div>
         <DropMenu
           anchorRef={menuButtonRef}

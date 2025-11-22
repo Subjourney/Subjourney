@@ -73,6 +73,112 @@ def _compute_continue_step_id_for_subjourney(
     return None
 
 
+def _validate_and_fix_continue_step_id(supabase, subjourney: Dict[str, Any], parent_journey: Dict[str, Any], parent_phases: List[Dict[str, Any]], parent_steps: List[Dict[str, Any]]) -> bool:
+    """
+    Validate and fix continue_step_id for a subjourney.
+    Returns True if the value was corrected, False if it was already correct.
+    """
+    computed_continue_step_id = _compute_continue_step_id_for_subjourney(
+        subjourney,
+        parent_journey,
+        parent_phases,
+        parent_steps,
+    )
+    
+    current_continue_step_id = subjourney.get("continue_step_id")
+    
+    # Normalize both to strings for comparison
+    computed_str = str(computed_continue_step_id) if computed_continue_step_id else None
+    current_str = str(current_continue_step_id) if current_continue_step_id else None
+    
+    # Check if the current value is correct
+    if computed_str == current_str:
+        return False  # Already correct
+    
+    # Validate that the current continue_step_id exists and is valid
+    if current_str:
+        # Check if the step exists in the parent journey
+        step_exists = any(s.get("id") == current_str for s in parent_steps)
+        if not step_exists:
+            # Step doesn't exist - definitely need to fix
+            now = datetime.utcnow().isoformat()
+            supabase.table("journeys").update({
+                "continue_step_id": computed_continue_step_id,
+                "updated_at": now,
+            }).eq("id", subjourney["id"]).execute()
+            return True
+    
+    # Value is different - update it
+    now = datetime.utcnow().isoformat()
+    supabase.table("journeys").update({
+        "continue_step_id": computed_continue_step_id,
+        "updated_at": now,
+    }).eq("id", subjourney["id"]).execute()
+    return True
+
+
+def _update_continue_step_ids_for_journey(supabase, journey_id: str):
+    """
+    Validate and update continue_step_id for all subjourneys of a given journey.
+    This should be called when steps are reordered or moved.
+    Always validates to ensure correctness even if steps were reordered after subjourney creation.
+    
+    Args:
+        supabase: Supabase client
+        journey_id: ID of the journey whose subjourneys should be updated
+    """
+    # Get the journey
+    journey_result = (
+        supabase.table("journeys")
+        .select("*")
+        .eq("id", journey_id)
+        .execute()
+    )
+    
+    if not journey_result.data:
+        return
+    
+    journey = journey_result.data[0]
+    
+    # Get all phases and steps for this journey
+    phases_result = (
+        supabase.table("phases")
+        .select("*")
+        .eq("journey_id", journey_id)
+        .order("sequence_order")
+        .execute()
+    )
+    phases = phases_result.data or []
+    
+    phase_ids = [p["id"] for p in phases]
+    steps = []
+    if phase_ids:
+        steps_result = (
+            supabase.table("steps")
+            .select("*")
+            .in_("phase_id", phase_ids)
+            .order("sequence_order")
+            .execute()
+        )
+        steps = steps_result.data or []
+    
+    # Get all subjourneys for this journey
+    subjourneys_result = (
+        supabase.table("journeys")
+        .select("*")
+        .eq("is_subjourney", True)
+        .in_("parent_step_id", [s["id"] for s in steps])
+        .execute()
+    )
+    subjourneys = subjourneys_result.data or []
+    
+    # Always validate and fix continue_step_id for each subjourney
+    # This ensures correctness even if steps were reordered after subjourney creation
+    for subjourney in subjourneys:
+        # Always validate and fix - this ensures correctness
+        _validate_and_fix_continue_step_id(supabase, subjourney, journey, phases, steps)
+
+
 class JourneyCreate(BaseModel):
     project_id: str
     name: str
@@ -164,6 +270,78 @@ async def create_journey(
             else:
                 sequence_order = 1  # First journey starts at 1
         
+        # For subjourneys, compute continue_step_id if not provided
+        computed_continue_step_id = journey_data.continue_step_id
+        if journey_data.is_subjourney and journey_data.parent_step_id and not journey_data.continue_step_id:
+            # Get parent step to find parent journey
+            parent_step_result = (
+                supabase.table("steps")
+                .select("phase_id")
+                .eq("id", journey_data.parent_step_id)
+                .execute()
+            )
+            
+            if parent_step_result.data:
+                parent_phase_id = parent_step_result.data[0].get("phase_id")
+                
+                if parent_phase_id:
+                    # Get phase to find journey
+                    parent_phase_result = (
+                        supabase.table("phases")
+                        .select("journey_id")
+                        .eq("id", parent_phase_id)
+                        .execute()
+                    )
+                    
+                    if parent_phase_result.data:
+                        parent_journey_id = parent_phase_result.data[0].get("journey_id")
+                        
+                        if parent_journey_id:
+                            # Get parent journey
+                            parent_journey_result = (
+                                supabase.table("journeys")
+                                .select("*")
+                                .eq("id", parent_journey_id)
+                                .execute()
+                            )
+                            
+                            if parent_journey_result.data:
+                                parent_journey = parent_journey_result.data[0]
+                                
+                                # Get parent journey phases and steps
+                                parent_phases_result = (
+                                    supabase.table("phases")
+                                    .select("*")
+                                    .eq("journey_id", parent_journey_id)
+                                    .order("sequence_order")
+                                    .execute()
+                                )
+                                parent_phases = parent_phases_result.data or []
+                                
+                                parent_phase_ids = [p["id"] for p in parent_phases]
+                                parent_steps = []
+                                if parent_phase_ids:
+                                    parent_steps_result = (
+                                        supabase.table("steps")
+                                        .select("*")
+                                        .in_("phase_id", parent_phase_ids)
+                                        .order("sequence_order")
+                                        .execute()
+                                    )
+                                    parent_steps = parent_steps_result.data or []
+                                
+                                # Compute continue_step_id
+                                subjourney_dict = {
+                                    "parent_step_id": journey_data.parent_step_id,
+                                    "continue_step_id": None,
+                                }
+                                computed_continue_step_id = _compute_continue_step_id_for_subjourney(
+                                    subjourney_dict,
+                                    parent_journey,
+                                    parent_phases,
+                                    parent_steps,
+                                )
+        
         # Create journey
         journey_insert = {
             "id": str(uuid.uuid4()),
@@ -173,7 +351,7 @@ async def create_journey(
             "description": journey_data.description,
             "is_subjourney": journey_data.is_subjourney,
             "parent_step_id": journey_data.parent_step_id,
-            "continue_step_id": journey_data.continue_step_id,
+            "continue_step_id": computed_continue_step_id,
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat(),
         }
@@ -522,7 +700,28 @@ async def get_journey_structure(
                     "allCards": subj_cards,
                 }
 
-                # If continue_step_id is not explicitly set on the subjourney, derive a robust default
+                # Always validate and fix continue_step_id to ensure correctness
+                # This catches cases where steps were reordered after subjourney creation
+                was_fixed = _validate_and_fix_continue_step_id(
+                    supabase,
+                    subjourney_with_structure,
+                    journey,
+                    phases,
+                    all_steps,
+                )
+                
+                # If it was fixed, reload the subjourney to get the updated continue_step_id
+                if was_fixed:
+                    updated_subjourney_result = (
+                        supabase.table("journeys")
+                        .select("*")
+                        .eq("id", subjourney_id)
+                        .execute()
+                    )
+                    if updated_subjourney_result.data:
+                        subjourney_with_structure["continue_step_id"] = updated_subjourney_result.data[0].get("continue_step_id")
+                
+                # If continue_step_id is still not set, compute it (shouldn't happen after validation)
                 if not subjourney_with_structure.get("continue_step_id"):
                     derived_continue_step_id = _compute_continue_step_id_for_subjourney(
                         subjourney_with_structure,
@@ -666,4 +865,112 @@ async def delete_journey(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete journey: {str(e)}")
+
+
+@router.post("/validate-continue-step-ids/{project_id}")
+async def validate_and_fix_continue_step_ids(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Validate and fix continue_step_id for all subjourneys in a project.
+    This ensures all continue_step_ids are correct based on current step ordering.
+    """
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+        
+        # Verify user has access to the project
+        project_result = (
+            supabase.table("projects")
+            .select("team_id")
+            .eq("id", project_id)
+            .execute()
+        )
+        
+        if not project_result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        team_id = project_result.data[0].get("team_id")
+        
+        # Check team membership
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get all journeys in the project (top-level only)
+        journeys_result = (
+            supabase.table("journeys")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("is_subjourney", False)
+            .execute()
+        )
+        
+        journeys = journeys_result.data or []
+        fixed_count = 0
+        total_subjourneys = 0
+        
+        # For each journey, validate and fix its subjourneys
+        for journey in journeys:
+            journey_id = journey["id"]
+            
+            # Get phases and steps for this journey
+            phases_result = (
+                supabase.table("phases")
+                .select("*")
+                .eq("journey_id", journey_id)
+                .order("sequence_order")
+                .execute()
+            )
+            phases = phases_result.data or []
+            
+            phase_ids = [p["id"] for p in phases]
+            steps = []
+            if phase_ids:
+                steps_result = (
+                    supabase.table("steps")
+                    .select("*")
+                    .in_("phase_id", phase_ids)
+                    .order("sequence_order")
+                    .execute()
+                )
+                steps = steps_result.data or []
+            
+            # Get all subjourneys for this journey
+            if steps:
+                subjourneys_result = (
+                    supabase.table("journeys")
+                    .select("*")
+                    .eq("is_subjourney", True)
+                    .in_("parent_step_id", [s["id"] for s in steps])
+                    .execute()
+                )
+                subjourneys = subjourneys_result.data or []
+                total_subjourneys += len(subjourneys)
+                
+                # Validate and fix each subjourney
+                for subjourney in subjourneys:
+                    if _validate_and_fix_continue_step_id(supabase, subjourney, journey, phases, steps):
+                        fixed_count += 1
+        
+        return {
+            "message": f"Validation complete. Fixed {fixed_count} out of {total_subjourneys} subjourneys.",
+            "fixed_count": fixed_count,
+            "total_subjourneys": total_subjourneys,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to validate continue_step_ids: {str(e)}")
 

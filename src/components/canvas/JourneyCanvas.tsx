@@ -246,6 +246,16 @@ function JourneyCanvasInner({
               navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}`);
             }
           },
+          onPhaseClick: (phaseId: string) => {
+            if (teamSlug && projectId) {
+              navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}?phase=${phaseId}`);
+            }
+          },
+          onStepClick: (stepId: string) => {
+            if (teamSlug && projectId) {
+              navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}?step=${stepId}`);
+            }
+          },
         },
         position: { x: 0, y: 0 }, // Will be positioned by ELK
         width: 300,
@@ -257,13 +267,13 @@ function JourneyCanvasInner({
         // Get the phase color for the parent step
         const phaseColor = parentPhase.color || '#3B82F6';
         
-        // Edge from parent to main journey
+        // Edge from parent step to main journey (from right side of parent step to left side of JourneyNode)
         flowEdges.push({
           id: `edge-parent-${parentJourney.id}-${currentJourney.id}`,
           source: `parent-${parentJourney.id}`,
-          sourceHandle: `journey-${parentJourney.id}-bottom-subjourney`,
+          sourceHandle: `step-${parentStep.id}`,
           target: currentJourney.id,
-          targetHandle: 'top',
+          targetHandle: 'parent-left',
           type: 'step-to-subjourney',
           style: {
             stroke: phaseColor,
@@ -272,6 +282,21 @@ function JourneyCanvasInner({
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: phaseColor,
+          },
+        });
+
+        // Layout edge from parent to journey node (ensures parent is positioned to the left)
+        flowEdges.push({
+          id: `edge-parent-${parentJourney.id}-${currentJourney.id}-layout`,
+          source: `parent-${parentJourney.id}`,
+          sourceHandle: `journey-${parentJourney.id}-bottom-subjourney`,
+          target: currentJourney.id,
+          targetHandle: 'parent-left',
+          type: 'default',
+          style: {
+            stroke: 'transparent', // Invisible edge, just for ELK layout
+            strokeWidth: 0,
+            opacity: 0,
           },
         });
 
@@ -313,6 +338,16 @@ function JourneyCanvasInner({
                 onJourneyClick: () => {
                   if (teamSlug && projectId) {
                     navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}`);
+                  }
+                },
+                onPhaseClick: (phaseId: string) => {
+                  if (teamSlug && projectId) {
+                    navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}?phase=${phaseId}`);
+                  }
+                },
+                onStepClick: (stepId: string) => {
+                  if (teamSlug && projectId) {
+                    navigate(`/${teamSlug}/project/${projectId}/journey/${parentJourney.id}?step=${stepId}`);
                   }
                 },
               },
@@ -449,6 +484,16 @@ function JourneyCanvasInner({
                 navigate(`/${teamSlug}/project/${projectId}/journey/${subjourney.id}`);
               }
             },
+            onPhaseClick: (phaseId: string) => {
+              if (teamSlug && projectId) {
+                navigate(`/${teamSlug}/project/${projectId}/journey/${subjourney.id}?phase=${phaseId}`);
+              }
+            },
+            onStepClick: (stepId: string) => {
+              if (teamSlug && projectId) {
+                navigate(`/${teamSlug}/project/${projectId}/journey/${subjourney.id}?step=${stepId}`);
+              }
+            },
           },
           position: { x: 0, y: 0 }, // Will be positioned by ELK
           width: 300,
@@ -545,40 +590,44 @@ function JourneyCanvasInner({
           });
         };
 
-        // Post-process: Ensure JourneyNode is on the left and NextNode is on the right
+        // Post-process: Ensure ParentNode is on the left, JourneyNode in the middle, and NextNode on the right, all vertically centered
         const processNodePositions = (nodes: Node[]): void => {
           const journeyNode = nodes.find(n => n.type === 'journey-node');
+          const parentNode = nodes.find(n => n.id.startsWith('parent-'));
           const nextNode = nodes.find(n => n.id.startsWith('next-'));
           
-          if (journeyNode && nextNode) {
-            // Check if they're on the same layer (same Y position, within tolerance)
-            const yTolerance = 10; // Allow small vertical differences
+          if (journeyNode) {
             const journeyY = journeyNode.position?.y || 0;
-            const nextY = nextNode.position?.y || 0;
-            const sameLayer = Math.abs(journeyY - nextY) < yTolerance;
-            
-            if (sameLayer) {
-              // Ensure JourneyNode is on the left (lower X) and NextNode is on the right (higher X)
               const journeyX = journeyNode.position?.x || 0;
-              const nextX = nextNode.position?.x || 0;
-              
-              if (journeyX > nextX) {
-                // Swap positions: JourneyNode should be on left
+            const journeyHeight = journeyNode.height || 400;
                 const journeyWidth = journeyNode.width || 400;
-                const spacing = 50; // Spacing between nodes
+            const journeyCenterY = journeyY + journeyHeight / 2;
+            const spacing = 100; // Spacing between nodes
                 
-                // Set JourneyNode to left position
-                journeyNode.position = {
-                  ...journeyNode.position!,
-                  x: nextX,
+            // Position parent node to the left of journey node
+            if (parentNode) {
+              const parentHeight = parentNode.height || 200;
+              const parentYCentered = journeyCenterY - parentHeight / 2;
+              const parentX = journeyX - spacing - (parentNode.width || 300);
+              
+              parentNode.position = {
+                ...parentNode.position!,
+                x: parentX,
+                y: parentYCentered,
                 };
+            }
                 
-                // Set NextNode to right of JourneyNode
+            // Position next node to the right of journey node
+            if (nextNode) {
+              const nextHeight = nextNode.height || 200;
+              const nextYCentered = journeyCenterY - nextHeight / 2;
+              const nextX = journeyX + journeyWidth + spacing;
+              
                 nextNode.position = {
                   ...nextNode.position!,
-                  x: nextX + journeyWidth + spacing,
+                x: nextX,
+                y: nextYCentered,
                 };
-              }
             }
           }
         };
@@ -755,18 +804,16 @@ function JourneyCanvasInner({
             if (isClipped(stepEl)) {
               centerOnRect(stepEl, journeyEl, 1.3);
             }
-          } else {
-            fitView({ padding: 0.25, includeHiddenNodes: true });
           }
+          // Don't call fitView if step element doesn't exist - likely deleted
         } else if (selectedPhase) {
           const phaseEl = document.querySelector(`[data-phase-id="${selectedPhase}"]`) as HTMLElement | null;
           if (phaseEl && journeyEl) {
             if (isClipped(phaseEl)) {
               centerOnRect(phaseEl, journeyEl, 1.15);
             }
-          } else {
-            fitView({ padding: 0.25, includeHiddenNodes: true });
           }
+          // Don't call fitView if phase element doesn't exist - likely deleted
         } else {
           // No selection: only auto-fit on initial load, not on deselection
           if (isFittingView) {

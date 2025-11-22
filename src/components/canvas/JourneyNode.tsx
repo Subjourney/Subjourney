@@ -9,6 +9,7 @@ import { Handle, Position } from '@xyflow/react';
 import { useJourneySizeMeasurement } from '../../hooks/useJourneySizeMeasurement';
 import { useSelection } from '../../store';
 import { JourneyDnDContainer } from '../journey/JourneyDnDContainer';
+import { NodeBadge } from './NodeBadge';
 import type { Journey } from '../../types';
 import type { NodeProps } from '@xyflow/react';
 
@@ -29,6 +30,10 @@ export function JourneyNode(props: NodeProps) {
     select('selectedJourney', id);
   };
 
+  const handleBadgeSelect = () => {
+    select('selectedJourney', id);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -45,6 +50,7 @@ export function JourneyNode(props: NodeProps) {
         boxShadow: isSelected
           ? 'var(--shadow-selected)'
           : 'var(--shadow-md)',
+        outline: isSelected ? '2px solid black' : '1px solid black',
         padding: '0',
         boxSizing: 'border-box',
         cursor: 'default',
@@ -135,6 +141,13 @@ export function JourneyNode(props: NodeProps) {
           }}
         />
       )}
+
+      {/* Journey name badge - floating above top left */}
+      <NodeBadge
+        label={journey.name}
+        isSelected={isSelected}
+        onSelect={handleBadgeSelect}
+      />
 
       <JourneyDnDContainer journey={journey} />
     </div>

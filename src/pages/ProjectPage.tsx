@@ -376,7 +376,7 @@ export function ProjectPage() {
           >
             Back
           </Button>
-          <div style={{ color: 'var(--color-text-primary)', fontSize: 'var(--font-size-base)' }}>
+          <div style={{ color: 'var(--color-text-primary)', fontSize: 'var(--font-size-base)', fontWeight: 'bold' }}>
             {displayProject.name}
           </div>
         </div>

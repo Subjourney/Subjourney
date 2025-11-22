@@ -91,14 +91,13 @@ function ProjectCanvasInner({
 
   const handleJourneyClick = useCallback(
     (journeyId: string) => {
-      select('selectedJourney', journeyId);
       if (onJourneyClick) {
         onJourneyClick(journeyId);
       } else {
         navigate(`/${teamSlug}/project/${project.id}/journey/${journeyId}`);
       }
     },
-    [select, onJourneyClick, navigate, teamSlug, project.id]
+    [onJourneyClick, navigate, teamSlug, project.id]
   );
 
   // Helper function to add spacing between rows (main journey + all its descendants)
@@ -374,66 +373,69 @@ function ProjectCanvasInner({
     });
 
     // Create edges from final step of subjourneys to their continuation targets
-    // Default: next sequential step after the parent step
-    // Edge case: if parent step is last in a subjourney, "return" to the parent step of the parent subjourney (no arrow)
+    // Only uses continue_step_id from the database - no computed fallbacks
     journeys.forEach((subjourney) => {
-      if (subjourney.is_subjourney && subjourney.parent_step_id) {
+      if (subjourney.is_subjourney && subjourney.parent_step_id && subjourney.continue_step_id) {
         const parentStepId = subjourney.parent_step_id;
         const parentJourneyId = stepIdToJourneyId.get(parentStepId);
         if (parentJourneyId) {
           const subjourneySteps = journeyStepsMap.get(subjourney.id) || [];
-          const parentSteps = journeyStepsMap.get(parentJourneyId) || [];
 
           // Find the final step in the subjourney
           const finalSubjourneyStep = subjourneySteps[subjourneySteps.length - 1];
 
-          // Find the parent step and get its index
-          const parentStepIndex = parentSteps.findIndex((step) => step.id === parentStepId);
-
-          if (finalSubjourneyStep && parentStepIndex >= 0) {
-            let targetStep: Step | undefined;
-            let isReturnToParentStep = false;
-
-            // Case 0: Explicit continuation via continue_step_id (if provided)
-            if (subjourney.continue_step_id) {
-              targetStep = stepIdToStep.get(subjourney.continue_step_id);
-              // If continue_step_id points back to the same parent step, this is a return (no arrow)
-              if (targetStep && targetStep.id === parentStepId) {
-                isReturnToParentStep = true;
-              }
-            }
-
-            // Case 1: There's a next step in the parent journey
-            if (!targetStep && parentStepIndex < parentSteps.length - 1) {
-              targetStep = parentSteps[parentStepIndex + 1];
-            }
-
-            // Case 2: Parent step is the last step AND parent journey is itself a subjourney.
-            // In this scenario, "return" to the parent step *within the base/parent subjourney* (no arrow).
+          if (finalSubjourneyStep) {
+            // Use continue_step_id directly from the database
+            // Normalize to string for consistent comparison
+            const continueStepId = String(subjourney.continue_step_id).trim();
+            
+            // Try to find the step - check both the exact ID and normalized versions
+            let targetStep = stepIdToStep.get(continueStepId);
+            
+            // If not found, try finding by iterating (in case of type mismatch)
             if (!targetStep) {
-              const parentJourney = journeyIdToJourney.get(parentJourneyId);
-              if (parentJourney?.is_subjourney) {
-                targetStep = parentSteps[parentStepIndex];
-                isReturnToParentStep = true;
-              }
-            }
-
-            // Case 3: Fallback - parent step is last and parent journey is top-level.
-            // Keep existing behaviour: connect to first step of next top-level journey.
-            if (!targetStep) {
-              const parentJourneyIndex = parentJourneysSorted.findIndex((j) => j.id === parentJourneyId);
-              if (parentJourneyIndex >= 0 && parentJourneyIndex < parentJourneysSorted.length - 1) {
-                const nextJourney = parentJourneysSorted[parentJourneyIndex + 1];
-                const nextJourneySteps = journeyStepsMap.get(nextJourney.id) || [];
-                const firstStepOfNextJourney = nextJourneySteps[0];
-                if (firstStepOfNextJourney) {
-                  targetStep = firstStepOfNextJourney;
+              for (const [stepId, step] of stepIdToStep.entries()) {
+                if (String(stepId).trim() === continueStepId || String(step.id).trim() === continueStepId) {
+                  targetStep = step;
+                  break;
                 }
               }
             }
+            
+            // Debug logging for continue_step_id lookup
+            if (!targetStep) {
+              console.error(
+                `[ProjectCanvas] Subjourney "${subjourney.name}" (${subjourney.id}) has continue_step_id "${continueStepId}" but step not found.`,
+                {
+                  continue_step_id: continueStepId,
+                  continue_step_id_type: typeof subjourney.continue_step_id,
+                  subjourneyName: subjourney.name,
+                  totalStepsInMap: stepIdToStep.size,
+                  // Find steps with similar names for debugging
+                  stepsWithNames: Array.from(stepIdToStep.values())
+                    .filter(s => s.name?.toLowerCase().includes('confirm') || s.name?.toLowerCase().includes('appointment'))
+                    .map(s => ({ id: s.id, name: s.name })),
+                }
+              );
+            } else {
+              // Log successful match for debugging
+              if (subjourney.id === 'beb6bd7c-49a1-4991-a57e-317f9240b4de') {
+                console.log(
+                  `[ProjectCanvas] Subjourney ${subjourney.id} continue_step_id lookup:`,
+                  {
+                    continue_step_id: continueStepId,
+                    foundStepId: targetStep.id,
+                    foundStepName: targetStep.name,
+                    match: String(targetStep.id) === continueStepId,
+                  }
+                );
+              }
+            }
+            
+            const isReturnToParentStep = targetStep && String(targetStep.id) === String(parentStepId);
 
             if (targetStep) {
-              const targetJourneyId = stepIdToJourneyId.get(targetStep.id);
+              const targetJourneyId = stepIdToJourneyId.get(String(targetStep.id));
               if (targetJourneyId) {
                 const baseStyle = {
                   stroke: 'var(--color-connector-dashed)',
@@ -451,7 +453,7 @@ function ProjectCanvasInner({
                   style: baseStyle,
                 };
 
-                // Only show an arrow when we're moving "forward" in the flow.
+                // Only show an arrow when we're moving "forward" in the flow (not returning to parent step)
                 if (!isReturnToParentStep) {
                   edge.markerEnd = {
                     type: MarkerType.ArrowClosed,
@@ -460,6 +462,10 @@ function ProjectCanvasInner({
                 }
 
                 flowEdges.push(edge);
+              } else {
+                console.warn(
+                  `[ProjectCanvas] Subjourney ${subjourney.id} target step ${targetStep.id} (${targetStep.name}) not found in stepIdToJourneyId map`
+                );
               }
             }
           }
@@ -683,15 +689,20 @@ function ProjectCanvasInner({
     (event: React.MouseEvent, node: Node) => {
       event.stopPropagation();
       if (node.type === 'journey-overview-node') {
-        select('selectedJourney', node.id);
-        if (onJourneyClick) {
-          onJourneyClick(node.id);
-        } else {
-          navigate(`/${teamSlug}/project/${project.id}/journey/${node.id}`);
+        // Check if the click target is the header (don't select or navigate if it is - header handles its own click)
+        const target = event.target as HTMLElement;
+        const isHeaderClick = target.closest('[data-journey-header]') !== null;
+        
+        // If clicking the header, don't do anything - let the header's onClick handle it
+        if (isHeaderClick) {
+          return;
         }
+        
+        // For non-header clicks, select the journey
+        select('selectedJourney', node.id);
       }
     },
-    [navigate, project.id, select, teamSlug, onJourneyClick]
+    [select]
   );
 
   return (

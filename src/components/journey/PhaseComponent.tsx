@@ -60,7 +60,7 @@ export function PhaseComponent({ phase, stepsWithSubjourneys, steps: providedSte
         className="phase-header"
         onClick={handleHeaderClick}
         style={{
-          fontWeight: 'var(--font-weight-bold)',
+          fontWeight: 'var(--font-weight-semibold)',
           marginBottom: 'var(--spacing-sm)',
           fontSize: 'var(--font-size-base)',
           color: isSelected ? '#ffffff' : phaseColor,

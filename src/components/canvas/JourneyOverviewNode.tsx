@@ -6,8 +6,10 @@
 
 import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Circle, Square } from '@phosphor-icons/react';
+import { Circle, Square, CaretRight } from '@phosphor-icons/react';
 import { useJourneySizeMeasurement } from '../../hooks/useJourneySizeMeasurement';
+import { useSelection } from '../../store/hooks';
+import { NodeBadge } from './NodeBadge';
 import type { Journey, Phase, Step } from '../../types';
 import type { NodeProps } from '@xyflow/react';
 
@@ -25,17 +27,27 @@ export function JourneyOverviewNode(props: NodeProps) {
   const nodeId = String(id);
   // Skip updateNodeInternals for project canvas - we don't need it since nodes aren't contained
   const { containerRef, size } = useJourneySizeMeasurement(nodeId, true);
+  const { select, selectedJourney } = useSelection();
   const [hoveredPhase, setHoveredPhase] = useState<string | null>(null);
   const [hoveredStep, setHoveredStep] = useState<string | null>(null);
+  const [headerHovered, setHeaderHovered] = useState(false);
   
   const nodeData = (data as unknown as JourneyOverviewNodeData);
   const { journey, phases = [], steps = [], onJourneyClick, onPhaseClick, onStepClick } = nodeData;
 
-  const handleClick = (e: React.MouseEvent) => {
+  const isSelected = selectedJourney !== null && String(selectedJourney) === nodeId;
+
+  const handleHeaderClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
+    // Navigate to journey canvas on single click (don't select)
     if (onJourneyClick) {
       onJourneyClick();
     }
+  };
+
+  const handleBadgeSelect = () => {
+    select('selectedJourney', id);
   };
 
   const handlePhaseClick = (phaseId: string, e: React.MouseEvent) => {
@@ -69,26 +81,54 @@ export function JourneyOverviewNode(props: NodeProps) {
         background: 'var(--surface-2)',
         border: 'var(--border-default)',
         borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-md)',
-        overflow: 'hidden',
+        boxShadow: isSelected ? 'var(--shadow-selected)' : 'var(--shadow-md)',
+        outline: isSelected ? '2px solid black' : '1px solid black',
+        overflow: 'visible',
         cursor: 'default',
         position: 'relative',
         '--measured-width': `${size.width}px`,
         '--measured-height': `${size.height}px`,
       } as React.CSSProperties}
-      onClick={handleClick}
-      onMouseDown={(e) => {
-        e.stopPropagation();
-      }}
       data-journey-id={id}
       data-journey-node="true"
       data-width={size.width}
       data-height={size.height}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+      }}
     >
+      {/* "Continue to" badge for next node - floating above top left */}
+      {nodeId.startsWith('next-') && (
+        <NodeBadge
+          label="To Journey"
+          isSelected={isSelected}
+          onSelect={handleBadgeSelect}
+        />
+      )}
+
+      {/* "From" badge for parent node - floating above top left */}
+      {nodeId.startsWith('parent-') && (
+        <NodeBadge
+          label="From Journey"
+          isSelected={isSelected}
+          onSelect={handleBadgeSelect}
+        />
+      )}
+
+      {/* "Journey" or "Subjourney" badge for regular journey overview nodes on project canvas - floating above top left */}
+      {!nodeId.startsWith('next-') && !nodeId.startsWith('parent-') && (
+        <NodeBadge
+          label={journey.is_subjourney ? 'Subjourney' : 'Journey'}
+          isSelected={isSelected}
+          onSelect={handleBadgeSelect}
+        />
+      )}
+
       {/* Journey Header */}
       <div
+        data-journey-header
         style={{
-          background: 'var(--surface-3)',
+          background: headerHovered ? 'var(--surface-4)' : 'var(--surface-3)',
           padding: 'var(--spacing-sm) 10px 10px 12px',
           borderBottom: 'var(--border-divider)',
           display: 'flex',
@@ -97,7 +137,19 @@ export function JourneyOverviewNode(props: NodeProps) {
           height: '40px',
           borderTopLeftRadius: 'var(--radius-lg)',
           borderTopRightRadius: 'var(--radius-lg)',
+          cursor: 'pointer',
         }}
+        onMouseDownCapture={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        onClick={handleHeaderClick}
+        onMouseEnter={() => setHeaderHovered(true)}
+        onMouseLeave={() => setHeaderHovered(false)}
       >
         <div
           style={{
@@ -112,18 +164,15 @@ export function JourneyOverviewNode(props: NodeProps) {
         >
           {journey.name}
         </div>
-        <div
+        <CaretRight
+          size={16}
+          weight="regular"
           style={{
-            fontSize: 'var(--font-size-xs)',
-            padding: '2px 6px',
-            borderRadius: 'var(--radius-sm)',
-            border: 'var(--border-default)',
-            background: 'var(--surface-5)',
-            color: 'var(--color-text-secondary)',
+            flexShrink: 0,
+            color: headerHovered ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+            marginTop: '1px',
           }}
-        >
-          {journey.is_subjourney ? 'Sub' : 'Main'}
-        </div>
+        />
 
         {/* Main Node Handles */}
         {/* Header-specific left handle for incoming connections */}
@@ -229,7 +278,7 @@ export function JourneyOverviewNode(props: NodeProps) {
                           gap: 'var(--spacing-sm)',
                           height: '40px',
                           paddingLeft: '20px',
-                          paddingRight: '20px',
+                          paddingRight: '10px',
                           borderBottom: isLastStepInLastPhase ? 'none' : 'var(--border-divider)',
                           cursor: 'pointer',
                           background:
@@ -262,7 +311,16 @@ export function JourneyOverviewNode(props: NodeProps) {
                         <span
                           style={{
                             fontSize: 'var(--font-size-xs)',
-                            color: 'var(--color-text-tertiary)',
+                            fontWeight: 'var(--font-weight-semibold)',
+                            color: hoveredStep === step.id ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            backgroundColor: hoveredStep === step.id ? (phase.color || '#3B82F6') : 'var(--surface-1)',
+                            flexShrink: 0,
                           }}
                         >
                           {step.sequence_order}
