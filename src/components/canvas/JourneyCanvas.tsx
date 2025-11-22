@@ -1,6 +1,11 @@
 /**
  * Journey Canvas Component
- * Main React Flow canvas for rendering journeys with manual layout
+ * Main React Flow canvas for rendering journeys with ELK.js automatic layout
+ * 
+ * Layout structure (top to bottom):
+ * - Row 1: Parent journey overview node (if viewing a subjourney)
+ * - Row 2: Main journey node (left) + Next step overview node (right, if exists)
+ * - Row 3: All subjourney overview nodes (centered, side by side)
  */
 
 import { useCallback, useEffect, useMemo, memo, useState, useRef } from 'react';
@@ -15,10 +20,10 @@ import {
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
-// Note: Dagre removed - using manual positioning
 import { JourneyNode } from './JourneyNode';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
 import { StepToSubjourneyEdge } from './StepToSubjourneyEdge';
+import { applyElkLayout } from './layout';
 import { useAppStore } from '../../store';
 import { useSelection } from '../../store';
 import { journeysApi, attributesApi } from '../../api';
@@ -76,6 +81,44 @@ function JourneyCanvasInner({
     return 'rgba(255, 255, 255, 0.15)';
   }, []);
 
+  // Helper function to load parent journey
+  const loadParentJourney = useCallback(async (journey: Journey) => {
+    if (journey.is_subjourney && journey.parent_step_id) {
+      try {
+        // Fetch step to get phase_id using Supabase
+        const { data: step, error: stepError } = await supabase
+          .from('steps')
+          .select('phase_id')
+          .eq('id', journey.parent_step_id)
+          .single();
+        
+        if (stepError || !step) {
+          throw stepError || new Error('Step not found');
+        }
+        
+        // Fetch phase to get journey_id
+        const { data: phase, error: phaseError } = await supabase
+          .from('phases')
+          .select('journey_id')
+          .eq('id', step.phase_id)
+          .single();
+        
+        if (phaseError || !phase) {
+          throw phaseError || new Error('Phase not found');
+        }
+        
+        // Fetch parent journey (always reload to get fresh data)
+        const parent = await journeysApi.getJourney(phase.journey_id, false);
+        setParentJourney(parent);
+      } catch (error) {
+        console.error('Failed to load parent journey:', error);
+        setParentJourney(null);
+      }
+    } else {
+      setParentJourney(null);
+    }
+  }, [setParentJourney]);
+
   // Load journey on mount
   useEffect(() => {
     if (journeyId) {
@@ -104,41 +147,8 @@ function JourneyCanvasInner({
             console.error('Failed to load step attributes:', error);
           }
           
-          // If this is a subjourney, fetch the parent journey
-          if (journey.is_subjourney && journey.parent_step_id) {
-            try {
-              // Fetch step to get phase_id using Supabase
-              const { data: step, error: stepError } = await supabase
-                .from('steps')
-                .select('phase_id')
-                .eq('id', journey.parent_step_id)
-                .single();
-              
-              if (stepError || !step) {
-                throw stepError || new Error('Step not found');
-              }
-              
-              // Fetch phase to get journey_id
-              const { data: phase, error: phaseError } = await supabase
-                .from('phases')
-                .select('journey_id')
-                .eq('id', step.phase_id)
-                .single();
-              
-              if (phaseError || !phase) {
-                throw phaseError || new Error('Phase not found');
-              }
-              
-              // Fetch parent journey
-              const parent = await journeysApi.getJourney(phase.journey_id, false);
-              setParentJourney(parent);
-            } catch (error) {
-              console.error('Failed to load parent journey:', error);
-              setParentJourney(null);
-            }
-          } else {
-            setParentJourney(null);
-          }
+          // Load parent journey if this is a subjourney
+          await loadParentJourney(journey);
         })
         .catch((error) => {
           console.error('Failed to load journey:', error);
@@ -154,18 +164,45 @@ function JourneyCanvasInner({
       setCurrentJourney(null);
       setParentJourney(null);
     };
-  }, [journeyId, setCurrentJourney, loadStepAttributesForJourney, setAttributes, projectId]);
+  }, [journeyId, setCurrentJourney, loadStepAttributesForJourney, setAttributes, projectId, loadParentJourney]);
 
-  // Convert journey data to React Flow nodes and edges
-  const { nodes, edges } = useMemo(() => {
+  // Reload parent journey when currentJourney changes
+  // This ensures parentJourney is fresh when steps/phases are deleted in the parent
+  useEffect(() => {
+    if (currentJourney && currentJourney.is_subjourney) {
+      loadParentJourney(currentJourney);
+    }
+  }, [currentJourney?.id, currentJourney?.is_subjourney, loadParentJourney]);
+  
+  // Also reload parent journey when currentJourney object reference changes
+  // This catches cases where the journey is reloaded (e.g., after step/phase deletion)
+  // We use a ref to track the last journey object to avoid infinite loops
+  const lastJourneyRef = useRef<Journey | null>(null);
+  useEffect(() => {
+    if (currentJourney && currentJourney.is_subjourney) {
+      // Check if this is a different journey object (even with same ID)
+      // This happens when journey is reloaded after mutations
+      if (lastJourneyRef.current !== currentJourney) {
+        lastJourneyRef.current = currentJourney;
+        // Reload parent journey to ensure fresh data
+        loadParentJourney(currentJourney);
+      }
+    } else {
+      lastJourneyRef.current = null;
+    }
+  }, [currentJourney, loadParentJourney]);
+
+  // Convert journey data to React Flow nodes and edges (raw, before ELK layout)
+  const { nodes: rawNodes, edges } = useMemo(() => {
     if (!currentJourney) {
       return { nodes: [], edges: [] };
     }
 
     const flowNodes: Node[] = [];
     const flowEdges: Edge[] = [];
+    let nextNodeData: Node | null = null; // Store NextNode to add after JourneyNode
 
-    // If viewing a subjourney, create journey overview node for parent journey
+    // Row 1: If viewing a subjourney, create journey overview node for parent journey
     if (currentJourney.is_subjourney && parentJourney) {
       // Filter to show only the parent step and its phase
       const parentPhases = parentJourney.allPhases || [];
@@ -210,23 +247,23 @@ function JourneyCanvasInner({
             }
           },
         },
-        position: { x: 0, y: 0 }, // Will be positioned manually
+        position: { x: 0, y: 0 }, // Will be positioned by ELK
         width: 300,
         height: calculatedHeight,
       });
 
-      // Create edge from parent step's right handle to current journey's left handle
-      // Connect from the step that this subjourney belongs to
+      // Create edges from parent to both main journey and next node (to place them on same layer)
       if (currentJourney.parent_step_id && parentStep && parentPhase) {
         // Get the phase color for the parent step
         const phaseColor = parentPhase.color || '#3B82F6';
         
+        // Edge from parent to main journey
         flowEdges.push({
           id: `edge-parent-${parentJourney.id}-${currentJourney.id}`,
           source: `parent-${parentJourney.id}`,
-          sourceHandle: `journey-${parentJourney.id}-bottom-subjourney`, // Bottom handle of the parent journey overview node
+          sourceHandle: `journey-${parentJourney.id}-bottom-subjourney`,
           target: currentJourney.id,
-          targetHandle: 'top', // Top handle of the journey node
+          targetHandle: 'top',
           type: 'step-to-subjourney',
           style: {
             stroke: phaseColor,
@@ -239,7 +276,6 @@ function JourneyCanvasInner({
         });
 
         // Find the next sequential step after the parent step
-        // Sort all steps by phase sequence_order and step sequence_order
         const sortedPhases = [...parentPhases].sort((a, b) => a.sequence_order - b.sequence_order);
         const allStepsSorted: typeof parentSteps = [];
         sortedPhases.forEach((phase) => {
@@ -264,10 +300,12 @@ function JourneyCanvasInner({
             const stepHeight = 1 * 40; // 1 step
             const calculatedNextHeight = headerHeight + phaseHeight + stepHeight;
 
-            // Create journey overview node for the next step
-            flowNodes.push({
-              id: `next-${parentJourney.id}-${nextStep.id}`,
-              type: 'journey-overview-node',
+            // Store next node info to add after main journey node (for proper ordering)
+            // We'll add it after the main journey node so ELK places JourneyNode first (left)
+            const nextNodeId = `next-${parentJourney.id}-${nextStep.id}`;
+            nextNodeData = {
+              id: nextNodeId,
+              type: 'journey-overview-node' as const,
               data: {
                 journey: parentJourney,
                 phases: [nextPhase],
@@ -278,19 +316,35 @@ function JourneyCanvasInner({
                   }
                 },
               },
-              position: { x: 0, y: 0 }, // Will be positioned manually
+              position: { x: 0, y: 0 },
               width: 300,
               height: calculatedNextHeight,
+            };
+
+            // Layout edge from parent to next node (places it on same layer as main journey)
+            // This invisible edge ensures NextNode is positioned on the same row as JourneyNode
+            flowEdges.push({
+              id: `edge-parent-${parentJourney.id}-next-${nextStep.id}-layout`,
+              source: `parent-${parentJourney.id}`,
+              sourceHandle: `journey-${parentJourney.id}-bottom-subjourney`,
+              target: nextNodeId,
+              targetHandle: `journey-${parentJourney.id}-header-left`,
+              type: 'default',
+              style: {
+                stroke: 'transparent', // Invisible edge, just for ELK layout
+                strokeWidth: 0,
+                opacity: 0,
+              },
             });
 
-            // Create edge from journey node's right handle to next step's left target handle
+            // Visual edge from main journey to next node (for the dashed connector)
             flowEdges.push({
-              id: `edge-${currentJourney.id}-next-${nextStep.id}`,
+              id: `edge-${currentJourney.id}-next-${nextStep.id}-visual`,
               source: currentJourney.id,
-              sourceHandle: 'next-step-right', // Right handle of the journey node
-              target: `next-${parentJourney.id}-${nextStep.id}`,
-              targetHandle: `step-${nextStep.id}-left-target`, // Left target handle of the next step
-              type: 'step-to-subjourney',
+              sourceHandle: 'next-step-right',
+              target: nextNodeId,
+              targetHandle: `step-${nextStep.id}-left-target`,
+              type: 'default',
               style: {
                 stroke: 'var(--color-connector-dashed)',
                 strokeWidth: 2,
@@ -306,38 +360,36 @@ function JourneyCanvasInner({
       }
     }
 
-    // Create node for main journey
+    // Row 2: Create node for main journey (must come before NextNode for left positioning)
     flowNodes.push({
       id: currentJourney.id,
       type: 'journey-node',
       data: { journey: currentJourney },
-      position: { x: 0, y: 0 }, // Will be positioned manually
+      position: { x: 0, y: 0 }, // Will be positioned by ELK
+      // Width and height will be read from data-width/data-height attributes by ELK
+      width: 400, // Default fallback
+      height: 300, // Default fallback
     });
 
-    // Subjourney nodes underneath the journey node (one for each subjourney, unfiltered)
+    // Add NextNode after JourneyNode (ensures JourneyNode is on left, NextNode on right)
+    if (nextNodeData) {
+      flowNodes.push(nextNodeData);
+    }
+
+    // Row 3: Subjourney nodes underneath the journey node
     if (currentJourney.subjourneys && currentJourney.subjourneys.length > 0) {
-      // Build a map of steps that have subjourneys
-      const stepToSubjourneys = new Map<string, typeof currentJourney.subjourneys>();
       const allPhases = currentJourney.allPhases || [];
       const stepToPhase = new Map<string, typeof allPhases[0]>();
       
+      // Build step to phase map
       currentJourney.subjourneys.forEach((subjourney) => {
-        if (subjourney.parent_step_id) {
-          if (!stepToSubjourneys.has(subjourney.parent_step_id)) {
-            stepToSubjourneys.set(subjourney.parent_step_id, []);
-          }
-          stepToSubjourneys.get(subjourney.parent_step_id)!.push(subjourney);
-          
-          // Find the phase for this step
-          if (!stepToPhase.has(subjourney.parent_step_id)) {
-            const allPhases = currentJourney.allPhases || [];
-            const allSteps = currentJourney.allSteps || [];
-            const step = allSteps.find(s => s.id === subjourney.parent_step_id);
-            if (step) {
-              const phase = allPhases.find(p => p.id === step.phase_id);
-              if (phase) {
-                stepToPhase.set(subjourney.parent_step_id, phase);
-              }
+        if (subjourney.parent_step_id && !stepToPhase.has(subjourney.parent_step_id)) {
+          const allSteps = currentJourney.allSteps || [];
+          const step = allSteps.find(s => s.id === subjourney.parent_step_id);
+          if (step) {
+            const phase = allPhases.find(p => p.id === step.phase_id);
+            if (phase) {
+              stepToPhase.set(subjourney.parent_step_id, phase);
             }
           }
         }
@@ -364,12 +416,12 @@ function JourneyCanvasInner({
               }
             },
           },
-          position: { x: 0, y: 0 }, // Will be positioned manually
+          position: { x: 0, y: 0 }, // Will be positioned by ELK
           width: 300,
           height: subCalculatedHeight,
         });
 
-        // Connect from parent step's bottom handle to subjourney's top handle
+        // Connect from main journey to subjourney (all subjourneys on same level below)
         if (subjourney.parent_step_id) {
           const parentStepId = subjourney.parent_step_id;
           const phase = stepToPhase.get(parentStepId);
@@ -378,7 +430,7 @@ function JourneyCanvasInner({
           flowEdges.push({
             id: `edge-step-${parentStepId}-to-subjourney-${subjourney.id}`,
             source: currentJourney.id,
-            sourceHandle: `step-${parentStepId}`, // Handle from StepComponent (position Bottom)
+            sourceHandle: `step-${parentStepId}`,
             target: `subjourneyNode-${subjourney.id}`,
             targetHandle: `journey-${subjourney.id}-top-subjourney`,
             type: 'step-to-subjourney',
@@ -396,7 +448,80 @@ function JourneyCanvasInner({
     }
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [currentJourney, parentJourney]);
+  }, [currentJourney, parentJourney, teamSlug, projectId, navigate]);
+
+  // Apply ELK.js layout to nodes
+  const [nodes, setNodes] = useState<Node[]>([]);
+
+  useEffect(() => {
+    if (rawNodes.length === 0) {
+      setNodes([]);
+      return;
+    }
+
+    // Filter edges for ELK layout - only use hierarchy edges, exclude visual-only edges
+    // Visual edges (like the dashed connector from main journey to next node) should not affect layout
+    const layoutEdges = edges.filter((edge) => {
+      // Exclude visual-only edges (those with -visual suffix)
+      // These are rendered but don't affect node positioning
+      return !edge.id.includes('-visual');
+    });
+
+    // Apply ELK layout - Top to Bottom hierarchical layout
+    applyElkLayout(rawNodes, layoutEdges, {
+      direction: 'TB', // Top to Bottom
+      nodeSep: 50, // Vertical spacing between nodes in same layer
+      rankSep: 100, // Horizontal spacing between layers
+      marginX: 50,
+      marginY: 50,
+      preferDomMeasurements: true, // Read from data-width/data-height attributes
+    })
+      .then((layouted) => {
+        // Post-process: Ensure JourneyNode is on the left and NextNode is on the right
+        // Find JourneyNode and NextNode
+        const journeyNode = layouted.nodes.find(n => n.type === 'journey-node');
+        const nextNode = layouted.nodes.find(n => n.id.startsWith('next-'));
+        
+        if (journeyNode && nextNode) {
+          // Check if they're on the same layer (same Y position, within tolerance)
+          const yTolerance = 10; // Allow small vertical differences
+          const journeyY = journeyNode.position?.y || 0;
+          const nextY = nextNode.position?.y || 0;
+          const sameLayer = Math.abs(journeyY - nextY) < yTolerance;
+          
+          if (sameLayer) {
+            // Ensure JourneyNode is on the left (lower X) and NextNode is on the right (higher X)
+            const journeyX = journeyNode.position?.x || 0;
+            const nextX = nextNode.position?.x || 0;
+            
+            if (journeyX > nextX) {
+              // Swap positions: JourneyNode should be on left
+              const journeyWidth = journeyNode.width || 400;
+              const spacing = 50; // Spacing between nodes
+              
+              // Set JourneyNode to left position
+              journeyNode.position = {
+                ...journeyNode.position!,
+                x: nextX,
+              };
+              
+              // Set NextNode to right of JourneyNode
+              nextNode.position = {
+                ...nextNode.position!,
+                x: nextX + journeyWidth + spacing,
+              };
+            }
+          }
+        }
+        
+        setNodes(layouted.nodes);
+      })
+      .catch((error) => {
+        console.error('ELK layout error:', error);
+        // Fallback to raw nodes if layout fails
+        setNodes(rawNodes);
+      });
+  }, [rawNodes, edges]);
 
   // Whenever we load a new journey, show the canvas overlay again
   useEffect(() => {
@@ -563,12 +688,10 @@ function JourneyCanvasInner({
 
   const onNodesChange = useCallback((changes: unknown[]) => {
     // Handle node changes (position updates, etc.)
-    console.log('Nodes changed:', changes);
   }, []);
 
   const onEdgesChange = useCallback((changes: unknown[]) => {
     // Handle edge changes
-    console.log('Edges changed:', changes);
   }, []);
 
   // Clear selection when clicking on canvas background

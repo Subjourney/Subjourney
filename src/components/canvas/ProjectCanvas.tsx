@@ -624,18 +624,15 @@ function ProjectCanvasInner({
   }, [rawNodes, edges, nodeSep, rankSep, mainJourneySep, journeys, addSpacingBetweenRows]);
 
 
-  const onNodesChange: OnNodesChange = useCallback((changes) => {
+  const onNodesChange: OnNodesChange = useCallback((_changes) => {
     // Handle node changes (position updates, etc.)
-    console.log('Nodes changed:', changes);
   }, []);
 
-  const onEdgesChange: OnEdgesChange = useCallback((changes) => {
+  const onEdgesChange: OnEdgesChange = useCallback((_changes) => {
     // Handle edge changes
-    console.log('Edges changed:', changes);
   }, []);
 
-  const onConnect: OnConnect = useCallback((connection) => {
-    console.log('Edge connected:', connection);
+  const onConnect: OnConnect = useCallback((_connection) => {
     // TODO: Handle new edge creation
   }, []);
 
