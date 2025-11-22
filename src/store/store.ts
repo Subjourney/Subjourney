@@ -60,11 +60,6 @@ interface AppStore extends SelectionState, UIState, DataState {
   isSubjourneyLoading: (subjourneyId: EntityId) => boolean;
   clearAllLoading: () => void;
 
-  // Animation state actions
-  markStepAsNewlyAdded: (stepId: EntityId) => void;
-  clearNewlyAddedStep: (stepId: EntityId) => void;
-  isStepNewlyAdded: (stepId: EntityId) => boolean;
-
   // Data actions
   setCurrentJourney: (journey: Journey | null) => void;
   setPhases: (phases: Phase[]) => void;
@@ -125,7 +120,6 @@ export const useAppStore = create<AppStore>()(
       isServiceBlueprintOpen: false,
       draggedBlueprintItem: null,
       isCenterWhenClicked: false,
-      newlyAddedSteps: new Set(),
 
       // Data state
       currentJourney: null,
@@ -469,28 +463,9 @@ export const useAppStore = create<AppStore>()(
         });
       },
 
-      // ===== ANIMATION STATE ACTIONS =====
-
-      markStepAsNewlyAdded: (stepId) => {
-        set((state) => ({
-          newlyAddedSteps: new Set([...state.newlyAddedSteps, stepId]),
-        }));
-      },
-
-      clearNewlyAddedStep: (stepId) => {
-        set((state) => ({
-          newlyAddedSteps: new Set([...state.newlyAddedSteps].filter((id) => id !== stepId)),
-        }));
-      },
-
-      isStepNewlyAdded: (stepId) => get().newlyAddedSteps.has(stepId),
-
       // ===== DATA ACTIONS =====
 
       setCurrentJourney: (journey) => {
-        set({ currentJourney: journey });
-        // Also update phases, steps, and cards from journey if available
-        // Include subjourney data as well
         if (journey) {
           const allPhases = [...(journey.allPhases || [])];
           const allSteps = [...(journey.allSteps || [])];
@@ -512,10 +487,13 @@ export const useAppStore = create<AppStore>()(
           }
           
           set({
+            currentJourney: journey,
             phases: allPhases,
             steps: allSteps,
             cards: allCards,
           });
+        } else {
+          set({ currentJourney: journey });
         }
       },
 
@@ -806,23 +784,20 @@ export const useAppStore = create<AppStore>()(
               await (await import('../api')).journeysApi.reorderSteps(rightStep.phase_id, desiredOrder);
               const refreshed = await (await import('../api')).journeysApi.getJourney(currentJourney.id, true);
               state.setCurrentJourney(refreshed);
-              // Select the newly created step and mark it for animation
+              // Select the newly created step
               if (createdStep?.id) {
                 state.select('selectedStep', createdStep.id);
-                state.markStepAsNewlyAdded(createdStep.id);
               }
             } catch (reorderErr) {
               console.warn('Failed to reorder steps after creation; using server ordering', reorderErr);
               // Still select the step even if reorder fails
               if (createdStep?.id) {
                 state.select('selectedStep', createdStep.id);
-                state.markStepAsNewlyAdded(createdStep.id);
               }
             }
           } else if (createdStep?.id) {
-            // If reorder logic didn't run, still select the new step
+            // Select the new step
             state.select('selectedStep', createdStep.id);
-            state.markStepAsNewlyAdded(createdStep.id);
           }
         } catch (err) {
           console.error('Failed to create step, reverting optimistic UI', err);

@@ -56,7 +56,7 @@ async def create_phase(
         
         # Check team membership
         membership = (
-            supabase.table("team_members")
+            supabase.table("team_memberships")
             .select("team_id")
             .eq("user_id", user_id)
             .eq("team_id", team_id)
@@ -67,15 +67,18 @@ async def create_phase(
             raise HTTPException(status_code=403, detail="Access denied")
         
         # Create phase
+        # Use default color if not provided
+        phase_color = phase_data.color or "#3B82F6"
         result = (
             supabase.table("phases")
             .insert(
                 {
                     "id": str(uuid.uuid4()),
+                    "team_id": team_id,
                     "journey_id": phase_data.journey_id,
                     "name": phase_data.name,
                     "description": phase_data.description,
-                    "color": phase_data.color,
+                    "color": phase_color,
                     "sequence_order": phase_data.sequence_order,
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat(),

@@ -7,7 +7,9 @@ export { JourneyTitle } from './JourneyTitle';
 export { DnDPhaseGrid } from './DnDPhaseGrid';
 export { DraggablePhase } from './DraggablePhase';
 export { PhaseComponent } from './PhaseComponent';
+export { PhaseToolbar } from './PhaseToolbar';
 export { DraggableStep } from './DraggableStep';
 export { StepComponent } from './StepComponent';
 export { DraggableCard } from './DraggableCard';
+export { StepToolbar } from './StepToolbar';
 

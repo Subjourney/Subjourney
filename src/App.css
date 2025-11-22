@@ -131,7 +131,7 @@
   /* Typography - Font Sizes */
   --font-size-xs: 10px;
   --font-size-sm: 12px;
-  --font-size-base: 14px;
+  --font-size-base: 15px;
   --font-size-md: 16px;
   --font-size-lg: 18px;
   --font-size-xl: 20px;
@@ -926,53 +926,3 @@
   }
 }
 
-/* ============================================
-   Step Animations
-   ============================================ */
-
-.step-newly-added {
-  animation: stepSpaceExpand 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  overflow: hidden;
-  flex-shrink: 0;
-  /* Ensure stable layout during animation */
-  box-sizing: border-box;
-}
-
-.step-newly-added > .step {
-  animation: stepFadeIn 0.4s ease-out 0.5s forwards;
-  animation-fill-mode: forwards;
-  opacity: 0;
-  visibility: hidden;
-  /* Prevent content from showing and interacting during space expansion */
-  pointer-events: none;
-}
-
-@keyframes stepSpaceExpand {
-  0% {
-    width: 0;
-    min-width: 0;
-    max-width: 0;
-    margin-right: 0;
-  }
-  100% {
-    width: 280px;
-    min-width: 280px;
-    max-width: 280px;
-    margin-right: var(--spacing-md);
-  }
-}
-
-@keyframes stepFadeIn {
-  0% {
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-4px);
-    pointer-events: none;
-  }
-  100% {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
-}

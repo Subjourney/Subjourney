@@ -68,6 +68,7 @@ export function StepComponent({ step, hasSubjourney = false }: StepComponentProp
     <div
       className="step"
       onClick={handleClick}
+      data-step-id={step.id}
       style={{
         padding: 'var(--spacing-md)',
         backgroundColor: 'var(--surface-3)',

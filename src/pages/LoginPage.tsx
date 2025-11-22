@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { signIn } from '../lib/auth';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { Button } from '../components/ui';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -169,24 +170,16 @@ export function LoginPage() {
             />
           </div>
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            fullWidth
+            state={loading ? 'loading' : 'default'}
             disabled={loading}
-            style={{
-              width: '100%',
-              padding: 'var(--spacing-md)',
-              background: loading ? 'var(--color-primary-light)' : 'var(--color-primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 'var(--font-size-base)',
-              fontWeight: 'var(--font-weight-semibold)',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginBottom: 'var(--spacing-md)',
-            }}
+            style={{ marginBottom: 'var(--spacing-md)' }}
           >
             {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+          </Button>
         </form>
 
         <div style={{ textAlign: 'center', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>

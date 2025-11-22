@@ -43,16 +43,18 @@ const proOptions = { hideAttribution: true };
  */
 function JourneyCanvasInner({ 
   journeyId, 
-  backgroundDotColor 
+  backgroundDotColor,
+  initialTarget,
 }: { 
   journeyId: string;
   backgroundDotColor?: string;
+  initialTarget?: { type: 'phase' | 'step'; id: string };
 }) {
   // Realtime subscriptions for attributes/step_attributes
   useRealtimeAttributes();
   const { currentJourney, setCurrentJourney, loadStepAttributesForJourney, setAttributes } = useAppStore();
-  const { clearSelection } = useSelection();
-  const { fitView } = useReactFlow();
+  const { clearSelection, selectedPhase, selectedStep } = useSelection();
+  const { fitView, getNode, setCenter, getViewport, getZoom } = useReactFlow();
   const [parentJourney, setParentJourney] = useState<Journey | null>(null);
   const [isFittingView, setIsFittingView] = useState(true);
   const [isFadingOut, setIsFadingOut] = useState(false);
@@ -62,6 +64,7 @@ function JourneyCanvasInner({
     teamSlug: string;
     projectId: string;
   }>();
+  const initialZoomHandledRef = useRef(false);
 
   // Get default background dot color from CSS variable
   const defaultDotColor = useMemo(() => {
@@ -564,11 +567,98 @@ function JourneyCanvasInner({
         })();
 
       if (isMeasured || attempts >= maxAttempts) {
-        // Fit view to all nodes so the entire JourneyCanvas graph is centered
-        fitView({
-          padding: 0.25,
-          includeHiddenNodes: true,
-        });
+        // Compute a custom center/zoom for phase/step selection
+        const centerOnRect = (targetEl: HTMLElement, journeyElEl: HTMLElement, paddingMultiplier: number) => {
+          const journeyNodeFlow = getNode(String(journeyNode.id));
+          if (!journeyNodeFlow) {
+            fitView({ padding: 0.25, includeHiddenNodes: true });
+            return;
+          }
+          const viewport = (typeof getViewport === 'function' ? getViewport() : null) as unknown as { width?: number; height?: number } | null;
+          const viewW = viewport?.width || window.innerWidth || 1;
+          const viewH = viewport?.height || window.innerHeight || 1;
+          const zoomNow = typeof getZoom === 'function' ? getZoom() : 1;
+
+          const targetRect = targetEl.getBoundingClientRect();
+          const journeyRect = journeyElEl.getBoundingClientRect();
+
+          // Center of target relative to journey element (in screen px)
+          const relCx = (targetRect.left - journeyRect.left) + targetRect.width / 2;
+          const relCy = (targetRect.top - journeyRect.top) + targetRect.height / 2;
+
+          // Convert to flow coordinates using current zoom
+          const centerX = journeyNodeFlow.position.x + relCx / Math.max(zoomNow, 0.01);
+          const centerY = journeyNodeFlow.position.y + relCy / Math.max(zoomNow, 0.01);
+
+          // Desired zoom to fit target with padding (normalize for current zoom for consistency)
+          const pad = Math.max(1, paddingMultiplier);
+          const targetFlowW = targetRect.width / Math.max(zoomNow, 0.01);
+          const targetFlowH = targetRect.height / Math.max(zoomNow, 0.01);
+          const zoomX = viewW / (targetFlowW * pad);
+          const zoomY = viewH / (targetFlowH * pad);
+          let desiredZoom = Math.min(zoomX, zoomY);
+          desiredZoom = Math.max(0.4, Math.min(2.0, desiredZoom));
+
+          setCenter(centerX, centerY, { zoom: desiredZoom, duration: 400 });
+        };
+
+        // Helper: check if an element is clipped by the canvas viewport
+        const isClipped = (el: HTMLElement): boolean => {
+          const container = document.querySelector('.react-flow') as HTMLElement | null;
+          const viewportRect = container?.getBoundingClientRect() || document.body.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          const pad = 4;
+          return r.left < viewportRect.left + pad ||
+                 r.top < viewportRect.top + pad ||
+                 r.right > viewportRect.right - pad ||
+                 r.bottom > viewportRect.bottom - pad;
+        };
+
+        // Initial navigation intent: zoom to target once even if visible
+        if (!initialZoomHandledRef.current && initialTarget && journeyEl) {
+          if (initialTarget.type === 'step') {
+            const stepEl = document.querySelector(`[data-step-id="${initialTarget.id}"]`) as HTMLElement | null;
+            if (stepEl) {
+              centerOnRect(stepEl, journeyEl, 1.3);
+              initialZoomHandledRef.current = true;
+              return;
+            }
+          } else if (initialTarget.type === 'phase') {
+            const phaseEl = document.querySelector(`[data-phase-id="${initialTarget.id}"]`) as HTMLElement | null;
+            if (phaseEl) {
+              centerOnRect(phaseEl, journeyEl, 1.15);
+              initialZoomHandledRef.current = true;
+              return;
+            }
+          }
+          initialZoomHandledRef.current = true;
+        }
+
+        if (selectedStep) {
+          const stepEl = document.querySelector(`[data-step-id="${selectedStep}"]`) as HTMLElement | null;
+          if (stepEl && journeyEl) {
+            // Only zoom on user-click selection when clipped
+            if (isClipped(stepEl)) {
+              centerOnRect(stepEl, journeyEl, 1.3);
+            }
+          } else {
+            fitView({ padding: 0.25, includeHiddenNodes: true });
+          }
+        } else if (selectedPhase) {
+          const phaseEl = document.querySelector(`[data-phase-id="${selectedPhase}"]`) as HTMLElement | null;
+          if (phaseEl && journeyEl) {
+            if (isClipped(phaseEl)) {
+              centerOnRect(phaseEl, journeyEl, 1.15);
+            }
+          } else {
+            fitView({ padding: 0.25, includeHiddenNodes: true });
+          }
+        } else {
+          // No selection: only auto-fit on initial load, not on deselection
+          if (isFittingView) {
+            fitView({ padding: 0.25, includeHiddenNodes: true });
+          }
+        }
 
         // Delay before starting fade-out, then fade out, then remove from DOM
         if (!cancelled) {
@@ -598,7 +688,7 @@ function JourneyCanvasInner({
         window.clearTimeout(fitHideTimerRef.current);
       }
     };
-  }, [nodes, fitView]);
+  }, [nodes, fitView, selectedStep, selectedPhase, isFittingView]);
 
 
   const onNodesChange = useCallback((changes: unknown[]) => {
@@ -674,15 +764,22 @@ function JourneyCanvasInner({
  */
 export function JourneyCanvas({ 
   journeyId, 
-  backgroundDotColor 
+  backgroundDotColor,
+  initialTarget,
 }: { 
   journeyId: string;
   backgroundDotColor?: string;
+  initialTarget?: { type: 'phase' | 'step'; id: string };
 }) {
   return (
     <ReactFlowProvider key={journeyId}>
       <div style={{ width: '100%', height: '100vh' }}>
-        <JourneyCanvasInner key={journeyId} journeyId={journeyId} backgroundDotColor={backgroundDotColor} />
+        <JourneyCanvasInner
+          key={journeyId}
+          journeyId={journeyId}
+          backgroundDotColor={backgroundDotColor}
+          initialTarget={initialTarget}
+        />
       </div>
     </ReactFlowProvider>
   );

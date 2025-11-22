@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, SignOut } from '@phosphor-icons/react';
 import { JourneyCanvas } from '../components/canvas';
 import { useAuth } from '../hooks/useAuth';
 import { signOut } from '../lib/auth';
 import { journeysApi } from '../api';
 import { useAppStore } from '../store';
+import { useSelection } from '../store/hooks';
 import type { Journey } from '../types';
+import { Button } from '../components/ui';
 
 /**
  * Journey Page
@@ -19,11 +22,34 @@ export function JourneyPage() {
     journeyId: string;
   }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { setCurrentJourney } = useAppStore();
+  const { select } = useSelection();
   const [journey, setJourney] = useState<Journey | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Handle phase/step selection from URL params
+  useEffect(() => {
+    const phaseId = searchParams.get('phase');
+    const stepId = searchParams.get('step');
+    
+    if (phaseId) {
+      select('selectedPhase', phaseId);
+    } else if (stepId) {
+      select('selectedStep', stepId);
+    }
+  }, [searchParams, select]);
+
+  // Initial selection intent for JourneyCanvas to perform custom zoom
+  const initialTarget = useMemo(() => {
+    const phaseId = searchParams.get('phase');
+    const stepId = searchParams.get('step');
+    if (stepId) return { type: 'step' as const, id: stepId };
+    if (phaseId) return { type: 'phase' as const, id: phaseId };
+    return null;
+  }, [searchParams]);
 
   // Load journey data
   useEffect(() => {
@@ -68,19 +94,12 @@ export function JourneyPage() {
     return (
       <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
         <div style={{ color: 'var(--color-error)', marginBottom: 'var(--spacing-md)' }}>{error}</div>
-        <button
+        <Button
+          variant="secondary"
           onClick={() => navigate(teamSlug && projectId ? `/${teamSlug}/project/${projectId}` : '/')}
-          style={{
-            padding: 'var(--spacing-sm) var(--spacing-md)',
-            background: 'var(--surface-2)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--color-text-primary)',
-            cursor: 'pointer',
-          }}
         >
           Go to Project
-        </button>
+        </Button>
       </div>
     );
   }
@@ -102,20 +121,15 @@ export function JourneyPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-          <button
+          <Button
+            icon={ArrowLeft}
+            iconPosition="left"
+            variant="secondary"
+            size="md"
             onClick={() => navigate(teamSlug && projectId ? `/${teamSlug}/project/${projectId}` : '/')}
-            style={{
-              padding: 'var(--spacing-sm) var(--spacing-md)',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-text-primary)',
-              fontSize: 'var(--font-size-sm)',
-              cursor: 'pointer',
-            }}
           >
-            ← Back to Project
-          </button>
+            Back to Project
+          </Button>
           <div style={{ color: 'var(--color-text-primary)', fontSize: 'var(--font-size-base)' }}>
             {journey?.name || `Journey ${journeyId}`}
           </div>
@@ -124,26 +138,21 @@ export function JourneyPage() {
           <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
             {user?.email}
           </div>
-          <button
+          <Button
+            icon={SignOut}
+            iconPosition="left"
+            variant="secondary"
+            size="sm"
             onClick={handleSignOut}
-            style={{
-              padding: 'var(--spacing-sm) var(--spacing-md)',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-text-primary)',
-              fontSize: 'var(--font-size-sm)',
-              cursor: 'pointer',
-            }}
           >
             Sign Out
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Journey Canvas - full viewport, header floats above */}
       <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-        <JourneyCanvas journeyId={journeyId || ''} />
+        <JourneyCanvas journeyId={journeyId || ''} initialTarget={initialTarget || undefined} />
       </div>
     </div>
   );

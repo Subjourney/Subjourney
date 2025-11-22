@@ -16,9 +16,11 @@ import {
   type OnEdgesChange,
   type OnConnect,
   MiniMap,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
 import { JourneyOverviewNode } from './JourneyOverviewNode';
+import { ProjectSetupNode } from './ProjectSetupNode';
 import { StepToSubjourneyEdge } from './StepToSubjourneyEdge';
 import { applyDagreLayout } from './layout';
 import { useSelection } from '../../store';
@@ -27,6 +29,7 @@ import { useNavigate } from 'react-router-dom';
 
 const nodeTypes = {
   'journey-overview-node': memo(JourneyOverviewNode),
+  'project-setup-node': memo(ProjectSetupNode),
 };
 
 const edgeTypes = {
@@ -44,6 +47,8 @@ interface ProjectCanvasInnerProps {
   onJourneyClick?: (journeyId: string) => void;
   onPhaseClick?: (phaseId: string) => void;
   onStepClick?: (stepId: string) => void;
+  onImportJourney?: () => void;
+  onCreateJourney?: () => void;
   backgroundDotColor?: string; // Color for the canvas background dots
 }
 
@@ -56,10 +61,13 @@ function ProjectCanvasInner({
   onJourneyClick,
   onPhaseClick,
   onStepClick,
+  onImportJourney,
+  onCreateJourney,
   backgroundDotColor, // Color for canvas background dots (defaults to CSS variable)
 }: ProjectCanvasInnerProps) {
   const { clearSelection, select } = useSelection();
   const navigate = useNavigate();
+  const reactFlow = useReactFlow();
 
   // Get default background dot color from CSS variable
   const defaultDotColor = useMemo(() => {
@@ -86,6 +94,23 @@ function ProjectCanvasInner({
   const { nodes, edges } = useMemo(() => {
     const flowNodes: Node[] = [];
     const flowEdges: Edge[] = [];
+
+    // Show setup node if project has no journeys
+    if (journeys.length === 0) {
+      const setupNode: Node = {
+        id: `project-setup-${project.id}`,
+        type: 'project-setup-node',
+        data: {
+          onImportJourney,
+          onCreateJourney,
+        },
+        position: { x: 0, y: 0 }, // Will be positioned by Dagre
+        width: 400,
+        height: 200,
+      };
+      flowNodes.push(setupNode);
+      return { nodes: flowNodes, edges: flowEdges };
+    }
 
     // Build a map from stepId -> parentJourneyId, stepId -> phase color, and stepId -> step
     const stepIdToJourneyId = new Map<string, string>();
@@ -218,6 +243,10 @@ function ProjectCanvasInner({
             // Case 0: Explicit continuation via continue_step_id (if provided)
             if (subjourney.continue_step_id) {
               targetStep = stepIdToStep.get(subjourney.continue_step_id);
+              // If continue_step_id points back to the same parent step, this is a return (no arrow)
+              if (targetStep && targetStep.id === parentStepId) {
+                isReturnToParentStep = true;
+              }
             }
 
             // Case 1: There's a next step in the parent journey
@@ -432,7 +461,8 @@ function ProjectCanvasInner({
     });
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [journeys, journeyPhases, phaseSteps, handleJourneyClick, onPhaseClick, onStepClick]);
+  }, [journeys, journeyPhases, phaseSteps, handleJourneyClick, onPhaseClick, onStepClick, project.id, onImportJourney, onCreateJourney]);
+
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
     // Handle node changes (position updates, etc.)
@@ -481,10 +511,10 @@ function ProjectCanvasInner({
       onPaneClick={onPaneClick}
       onNodeClick={onNodeClick}
       fitView
-      fitViewOptions={{ padding: 0.25, includeHiddenNodes: true }}
+      fitViewOptions={{ padding: 0.1, includeHiddenNodes: true }}
       proOptions={proOptions}
       minZoom={0.1}
-      maxZoom={2}
+      maxZoom={1.2}
       attributionPosition="bottom-left"
       panOnScroll={true}
       selectionOnDrag={true}

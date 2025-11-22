@@ -6,7 +6,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useEffect, useRef } from 'react';
 import type { Step, Card } from '../../types';
 import { StepComponent } from './StepComponent';
 import { useAppStore } from '../../store';
@@ -20,12 +19,10 @@ interface DraggableStepProps {
 }
 
 export function DraggableStep({ step, phaseId, index, hasSubjourney = false }: DraggableStepProps) {
-  const { getCardsForStep, isStepNewlyAdded, clearNewlyAddedStep } = useAppStore();
+  const { getCardsForStep } = useAppStore();
   const cards = getCardsForStep(step.id);
   const sortedCards = [...cards].sort((a, b) => a.position - b.position);
   const cardIds = sortedCards.map((c) => c.id);
-  const isNewlyAdded = isStepNewlyAdded(step.id);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const {
     attributes,
@@ -44,21 +41,6 @@ export function DraggableStep({ step, phaseId, index, hasSubjourney = false }: D
     },
   });
 
-  // Clear the "newly added" flag after all animations complete
-  useEffect(() => {
-    if (isNewlyAdded && containerRef.current) {
-      // Wait for the fade-in animation to complete (starts at 0.5s, lasts 0.4s = 0.9s total)
-      // Add a small buffer to ensure both animations are done
-      const timeoutId = setTimeout(() => {
-        clearNewlyAddedStep(step.id);
-      }, 950); // 0.95s to ensure both animations complete
-
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    }
-  }, [isNewlyAdded, step.id, clearNewlyAddedStep]);
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -67,16 +49,10 @@ export function DraggableStep({ step, phaseId, index, hasSubjourney = false }: D
 
   return (
     <div
-      ref={(el) => {
-        setNodeRef(el);
-        if (containerRef.current !== el) {
-          containerRef.current = el;
-        }
-      }}
+      ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className={isNewlyAdded ? 'step-newly-added' : ''}
     >
       <StepComponent step={step} hasSubjourney={hasSubjourney} />
       {cardIds.length > 0 && (

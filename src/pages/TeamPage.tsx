@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Plus, SignOut } from '@phosphor-icons/react';
 import { useAuth } from '../hooks/useAuth';
 import { signOut } from '../lib/auth';
-import { projectsApi, teamsApi } from '../api';
 import type { Project, Team } from '../types';
+import { Button, DialogProject } from '../components/ui';
+import { projectsApi } from '../api';
 
 /**
  * Team Dashboard Page
@@ -18,6 +20,7 @@ export function TeamPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Load team and projects
   useEffect(() => {
@@ -48,17 +51,24 @@ export function TeamPage() {
 
         setTeam(teamData);
 
-        // Get projects for this team
-        const { data: projectsData, error: projectsError } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('team_id', teamData.id)
-          .order('created_at', { ascending: false });
-
-        if (projectsError) {
-          setError(projectsError.message);
-        } else {
+        // Get projects for this team using API
+        try {
+          const projectsData = await projectsApi.getTeamProjects(teamData.id);
           setProjects(projectsData || []);
+        } catch (err) {
+          console.error('Failed to load projects:', err);
+          // Fallback to Supabase if API fails
+          const { data: projectsData, error: projectsError } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('team_id', teamData.id)
+            .order('created_at', { ascending: false });
+
+          if (projectsError) {
+            setError(projectsError.message);
+          } else {
+            setProjects(projectsData || []);
+          }
         }
 
         setLoading(false);
@@ -80,6 +90,41 @@ export function TeamPage() {
     navigate(`/${teamSlug}/project/${projectId}`);
   };
 
+  const handleOpenDialog = () => {
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+  };
+
+  const handleProjectCreated = async (_project: Project) => {
+    // Reload projects list
+    if (team) {
+      try {
+        const projectsData = await projectsApi.getTeamProjects(team.id);
+        setProjects(projectsData || []);
+      } catch (err) {
+        console.error('Failed to reload projects:', err);
+        // Fallback to Supabase if API fails
+        try {
+          const { supabase } = await import('../lib/supabase');
+          const { data: projectsData, error: projectsError } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('team_id', team.id)
+            .order('created_at', { ascending: false });
+
+          if (!projectsError && projectsData) {
+            setProjects(projectsData);
+          }
+        } catch (fallbackErr) {
+          console.error('Failed to reload projects (fallback):', fallbackErr);
+        }
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -92,25 +137,60 @@ export function TeamPage() {
     return (
       <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
         <div style={{ color: 'var(--color-error)', marginBottom: 'var(--spacing-md)' }}>{error}</div>
-        <button
+        <Button
+          variant="secondary"
           onClick={() => navigate('/')}
-          style={{
-            padding: 'var(--spacing-sm) var(--spacing-md)',
-            background: 'var(--surface-2)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--color-text-primary)',
-            cursor: 'pointer',
-          }}
         >
           Go to Home
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Top Bar */}
+      <div
+        style={{
+          background: 'var(--surface-1)',
+          borderBottom: '1px solid var(--color-border)',
+          padding: 'var(--spacing-md)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        {/* Team Switcher Placeholder */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--spacing-sm)',
+            color: 'var(--color-text-secondary)',
+            fontSize: 'var(--font-size-sm)',
+          }}
+        >
+          {/* Placeholder for team switcher */}
+          <div
+            style={{
+              padding: 'var(--spacing-xs) var(--spacing-sm)',
+              background: 'var(--surface-2)',
+              border: '1px dashed var(--color-border-1)',
+              borderRadius: 'var(--radius-md)',
+              minWidth: '120px',
+              textAlign: 'center',
+            }}
+          >
+            Team Switcher
+          </div>
+        </div>
+
+        {/* Project Button */}
+        <Button icon={Plus} iconPosition="left" variant="primary" size="md" onClick={handleOpenDialog}>
+          Project
+        </Button>
+      </div>
+
       {/* Header */}
       <div
         style={{
@@ -129,20 +209,15 @@ export function TeamPage() {
           <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
             {user?.email}
           </div>
-          <button
+          <Button
+            icon={SignOut}
+            iconPosition="left"
+            variant="secondary"
+            size="md"
             onClick={handleSignOut}
-            style={{
-              padding: 'var(--spacing-sm) var(--spacing-md)',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-text-primary)',
-              fontSize: 'var(--font-size-sm)',
-              cursor: 'pointer',
-            }}
           >
             Sign Out
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -184,7 +259,7 @@ export function TeamPage() {
                   key={project.id}
                   onClick={() => handleProjectClick(project.id)}
                   style={{
-                    background: 'var(--surface-1)',
+                    background: 'var(--surface-2)',
                     border: '1px solid var(--color-border)',
                     borderRadius: 'var(--radius-md)',
                     padding: 'var(--spacing-md)',
@@ -212,6 +287,16 @@ export function TeamPage() {
           </div>
         )}
       </div>
+
+      {/* Project Dialog */}
+      {team && (
+        <DialogProject
+          open={isDialogOpen}
+          onClose={handleCloseDialog}
+          onSubmit={handleProjectCreated}
+          teamId={team.id}
+        />
+      )}
     </div>
   );
 }

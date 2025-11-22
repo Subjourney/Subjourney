@@ -14,6 +14,13 @@ export async function getProjects(): Promise<Project[]> {
 }
 
 /**
+ * Get all projects for a specific team
+ */
+export async function getTeamProjects(teamId: string): Promise<Project[]> {
+  return apiClient.get<Project[]>(`/api/projects/team/${teamId}`);
+}
+
+/**
  * Get a single project by ID
  */
 export async function getProject(projectId: string): Promise<Project> {
@@ -23,8 +30,8 @@ export async function getProject(projectId: string): Promise<Project> {
 /**
  * Create a new project
  */
-export async function createProject(data: Partial<Project>): Promise<Project> {
-  return apiClient.post<Project>('/api/projects', data);
+export async function createProject(data: { team_id: string; name: string; description?: string }): Promise<Project> {
+  return apiClient.post<Project>('/api/projects/create', data);
 }
 
 /**

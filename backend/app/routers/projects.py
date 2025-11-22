@@ -16,6 +16,11 @@ class ProjectCreate(BaseModel):
     description: str = ""
 
 
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
 class ProjectResponse(BaseModel):
     id: str
     team_id: str
@@ -39,7 +44,7 @@ async def create_project(
         
         # Verify user has access to the team
         membership = (
-            supabase.table("team_members")
+            supabase.table("team_memberships")
             .select("team_id")
             .eq("user_id", user_id)
             .eq("team_id", project_data.team_id)
@@ -89,7 +94,7 @@ async def get_team_projects(
         
         # Verify user has access to the team
         membership = (
-            supabase.table("team_members")
+            supabase.table("team_memberships")
             .select("team_id")
             .eq("user_id", user_id)
             .eq("team_id", team_id)
@@ -141,7 +146,7 @@ async def get_project(project_id: str, current_user: dict = Depends(get_current_
         
         # Verify user has access to the team
         membership = (
-            supabase.table("team_members")
+            supabase.table("team_memberships")
             .select("team_id")
             .eq("user_id", user_id)
             .eq("team_id", team.get("id"))
@@ -156,4 +161,123 @@ async def get_project(project_id: str, current_user: dict = Depends(get_current_
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get project: {str(e)}")
+
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: str,
+    project_data: ProjectUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a project."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+        
+        # Get project
+        result = (
+            supabase.table("projects")
+            .select("*")
+            .eq("id", project_id)
+            .execute()
+        )
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        project = result.data[0]
+        team_id = project.get("team_id")
+        
+        # Verify user has access to the team
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied to this project")
+        
+        # Build update data (only include fields that are provided)
+        update_data = {"updated_at": datetime.utcnow().isoformat()}
+        if project_data.name is not None:
+            update_data["name"] = project_data.name
+        if project_data.description is not None:
+            update_data["description"] = project_data.description
+        
+        # Update project
+        result = (
+            supabase.table("projects")
+            .update(update_data)
+            .eq("id", project_id)
+            .execute()
+        )
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update project")
+        
+        return ProjectResponse(**result.data[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update project: {str(e)}")
+
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a project."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+        
+        # Get project
+        result = (
+            supabase.table("projects")
+            .select("*")
+            .eq("id", project_id)
+            .execute()
+        )
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        project = result.data[0]
+        team_id = project.get("team_id")
+        
+        # Verify user has access to the team
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied to this project")
+        
+        # Delete project (cascade will handle related data if configured in database)
+        result = (
+            supabase.table("projects")
+            .delete()
+            .eq("id", project_id)
+            .execute()
+        )
+        
+        return {"message": "Project deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete project: {str(e)}")
 

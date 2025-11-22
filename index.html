@@ -5,14 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>subjourney</title>
-  
+    
     <!-- Situ Design Auth Wrapper -->
     
     
     <!-- Situ Design Inspector (development only) -->
-    
-    
-    
     
     
     
@@ -37,16 +34,22 @@
     </script>
     <script defer src="/plugins/situ-design/situImport.bundle.js"></script>
     <script>
+      // Auto-initialize inspector after bundle loads
+      // Inspector will check authentication before initializing
       document.addEventListener('DOMContentLoaded', () => {
         if (typeof window.installReactClickInspector === 'function') {
           window.installReactClickInspector();
         }
       });
+      // Also try immediately in case DOM is already loaded
       if (document.readyState === 'complete' || document.readyState === 'interactive') {
         if (typeof window.installReactClickInspector === 'function') {
           window.installReactClickInspector();
         }
       }
+
+      // Periodically check attestation status (in case user logs in after page load)
+      // If attestation becomes valid later, initialize the inspector
       let authCheckInterval = setInterval(() => {
         if (window.__SITU_ATTESTED === true 
             && typeof window.installReactClickInspector === 'function' 
@@ -54,6 +57,8 @@
           window.installReactClickInspector();
         }
       }, 2000);
+
+      // Stop checking after 5 minutes to avoid unnecessary polling
       setTimeout(() => {
         clearInterval(authCheckInterval);
       }, 300000);

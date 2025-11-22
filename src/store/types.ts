@@ -38,7 +38,6 @@ export interface UIState {
   isServiceBlueprintOpen: boolean;
   draggedBlueprintItem: unknown | null;
   isCenterWhenClicked: boolean;
-  newlyAddedSteps: Set<EntityId>; // Track steps that were just added for animation
 }
 
 /**

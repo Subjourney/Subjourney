@@ -82,6 +82,11 @@ class JourneyCreate(BaseModel):
     continue_step_id: Optional[str] = None
 
 
+class JourneyUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
 class JourneyResponse(BaseModel):
     id: str
     project_id: str
@@ -90,6 +95,7 @@ class JourneyResponse(BaseModel):
     is_subjourney: bool = False
     parent_step_id: Optional[str] = None
     continue_step_id: Optional[str] = None
+    sequence_order: Optional[int] = None
     created_at: str
     updated_at: str
 
@@ -121,7 +127,7 @@ async def create_journey(
         
         # Check team membership
         membership = (
-            supabase.table("team_members")
+            supabase.table("team_memberships")
             .select("team_id")
             .eq("user_id", user_id)
             .eq("team_id", team_id)
@@ -131,23 +137,50 @@ async def create_journey(
         if not membership.data:
             raise HTTPException(status_code=403, detail="Access denied")
         
+        # Calculate sequence_order for top-level journeys
+        sequence_order = None
+        if not journey_data.is_subjourney:
+            # Get the maximum sequence_order for top-level journeys in this project
+            existing_journeys = (
+                supabase.table("journeys")
+                .select("sequence_order")
+                .eq("project_id", journey_data.project_id)
+                .eq("is_subjourney", False)
+                .execute()
+            )
+            
+            if existing_journeys.data:
+                # Filter out None values and get max
+                sequence_orders = [j.get("sequence_order") for j in existing_journeys.data if j.get("sequence_order") is not None]
+                if sequence_orders:
+                    max_order = max(sequence_orders)
+                    sequence_order = max_order + 1
+                else:
+                    sequence_order = 1  # First journey starts at 1
+            else:
+                sequence_order = 1  # First journey starts at 1
+        
         # Create journey
+        journey_insert = {
+            "id": str(uuid.uuid4()),
+            "team_id": team_id,
+            "project_id": journey_data.project_id,
+            "name": journey_data.name,
+            "description": journey_data.description,
+            "is_subjourney": journey_data.is_subjourney,
+            "parent_step_id": journey_data.parent_step_id,
+            "continue_step_id": journey_data.continue_step_id,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        
+        # Only set sequence_order for top-level journeys
+        if sequence_order is not None:
+            journey_insert["sequence_order"] = sequence_order
+        
         result = (
             supabase.table("journeys")
-            .insert(
-                {
-                    "id": str(uuid.uuid4()),
-                    "team_id": team_id,
-                    "project_id": journey_data.project_id,
-                    "name": journey_data.name,
-                    "description": journey_data.description,
-                    "is_subjourney": journey_data.is_subjourney,
-                    "parent_step_id": journey_data.parent_step_id,
-                    "continue_step_id": journey_data.continue_step_id,
-                    "created_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat(),
-                }
-            )
+            .insert(journey_insert)
             .execute()
         )
         
@@ -188,7 +221,7 @@ async def get_project_journeys(
         
         # Check team membership
         membership = (
-            supabase.table("team_members")
+            supabase.table("team_memberships")
             .select("team_id")
             .eq("user_id", user_id)
             .eq("team_id", team_id)
@@ -203,11 +236,36 @@ async def get_project_journeys(
             supabase.table("journeys")
             .select("*")
             .eq("project_id", project_id)
-            .order("created_at", desc=True)
             .execute()
         )
         
-        return result.data or []
+        journeys = result.data or []
+        
+        # Sort in Python: top-level journeys by sequence_order, then subjourneys by created_at
+        def sort_key(journey):
+            if journey.get("is_subjourney"):
+                # Subjourneys: sort by created_at descending, but after all top-level journeys
+                # Use a large number to ensure they come after top-level journeys
+                created_at = journey.get("created_at", "")
+                return (1, created_at)  # Will be sorted descending by created_at
+            else:
+                # Top-level journeys: sort by sequence_order ascending
+                return (0, journey.get("sequence_order", 0))
+        
+        # Sort: first by is_subjourney (0 for top-level, 1 for subjourneys)
+        # Then by sequence_order for top-level, or created_at for subjourneys
+        journeys.sort(key=sort_key)
+        
+        # Reverse subjourneys to get descending order by created_at
+        # We'll do this by splitting and recombining
+        top_level = [j for j in journeys if not j.get("is_subjourney")]
+        subjourneys = [j for j in journeys if j.get("is_subjourney")]
+        # Subjourneys should be in descending order by created_at
+        subjourneys.sort(key=lambda j: j.get("created_at", ""), reverse=True)
+        
+        return top_level + subjourneys
+        
+        return journeys
     except HTTPException:
         raise
     except Exception as e:
@@ -255,6 +313,71 @@ async def get_journey(journey_id: str, current_user: dict = Depends(get_current_
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get journey: {str(e)}")
+
+
+@router.patch("/{journey_id}", response_model=JourneyResponse)
+async def update_journey(
+    journey_id: str,
+    journey_data: JourneyUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a journey."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    try:
+        supabase = get_supabase_admin()
+        
+        # Get journey
+        result = (
+            supabase.table("journeys")
+            .select("*")
+            .eq("id", journey_id)
+            .execute()
+        )
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Journey not found")
+        
+        journey = result.data[0]
+        team_id = journey.get("team_id")
+        
+        # Verify user has access to the team
+        membership = (
+            supabase.table("team_memberships")
+            .select("team_id")
+            .eq("user_id", user_id)
+            .eq("team_id", team_id)
+            .execute()
+        )
+        
+        if not membership.data:
+            raise HTTPException(status_code=403, detail="Access denied to this journey")
+        
+        # Build update data (only include fields that are provided)
+        update_data = {"updated_at": datetime.utcnow().isoformat()}
+        if journey_data.name is not None:
+            update_data["name"] = journey_data.name
+        if journey_data.description is not None:
+            update_data["description"] = journey_data.description
+        
+        # Update journey
+        result = (
+            supabase.table("journeys")
+            .update(update_data)
+            .eq("id", journey_id)
+            .execute()
+        )
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update journey")
+        
+        return JourneyResponse(**result.data[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update journey: {str(e)}")
 
 
 @router.get("/{journey_id}/structure")

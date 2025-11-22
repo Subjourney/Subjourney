@@ -22,9 +22,9 @@ export async function getJourney(
  * Create a new journey
  */
 export async function createJourney(
-  data: Partial<Journey>
+  data: { project_id: string; name: string; description?: string }
 ): Promise<Journey> {
-  return apiClient.post<Journey>('/api/journeys', data);
+  return apiClient.post<Journey>('/api/journeys/create', data);
 }
 
 /**
@@ -51,7 +51,10 @@ export async function createPhase(
   journeyId: string,
   data: Partial<Phase>
 ): Promise<Phase> {
-  return apiClient.post<Phase>(`/api/journeys/${journeyId}/phases`, data);
+  return apiClient.post<Phase>('/api/phases/create', {
+    journey_id: journeyId,
+    ...data,
+  });
 }
 
 /**

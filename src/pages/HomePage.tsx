@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SignOut } from '@phosphor-icons/react';
 import { useAuth } from '../hooks/useAuth';
 import { useTeam } from '../hooks/useTeam';
 import { signOut } from '../lib/auth';
 import { projectsApi } from '../api';
 import type { Project } from '../types';
+import { Button } from '../components/ui';
 
 /**
  * Home Page
@@ -77,20 +79,15 @@ export function HomePage() {
           <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
             {user?.email}
           </div>
-          <button
+          <Button
+            icon={SignOut}
+            iconPosition="left"
+            variant="secondary"
+            size="sm"
             onClick={handleSignOut}
-            style={{
-              padding: 'var(--spacing-sm) var(--spacing-md)',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-text-primary)',
-              fontSize: 'var(--font-size-sm)',
-              cursor: 'pointer',
-            }}
           >
             Sign Out
-          </button>
+          </Button>
         </div>
       </div>
 

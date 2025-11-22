@@ -261,7 +261,8 @@ def create_journey(
     journey_data: Dict[str, Any],
     is_subjourney: bool = False,
     parent_step_id: Optional[str] = None,
-    continue_step_id: Optional[str] = None
+    continue_step_id: Optional[str] = None,
+    sequence_order: Optional[int] = None
 ) -> Optional[str]:
     """Create journey from journey data."""
     journey_name = journey_data.get("name", "Untitled Journey")
@@ -282,6 +283,11 @@ def create_journey(
         "created_at": timestamp,
         "updated_at": timestamp,
     }
+    
+    # sequence_order is only set for top-level journeys (not subjourneys)
+    # According to migration: subjourneys must have NULL sequence_order
+    if not is_subjourney and sequence_order is not None:
+        journey_insert_data["sequence_order"] = sequence_order
     
     if parent_step_id:
         journey_insert_data["parent_step_id"] = parent_step_id
@@ -315,6 +321,7 @@ def create_phases(
     for phase in phases_data:
         phase_name = phase.get("name")
         phase_color = phase.get("color", "#3B82F6")
+        phase_description = phase.get("description", "")
         sequence_order = phase.get("sequence_order", 1)
         
         print_status(f"Creating phase: {phase_name}")
@@ -329,6 +336,10 @@ def create_phases(
             "created_at": timestamp,
             "updated_at": timestamp,
         }
+        
+        # Add description if provided (nullable field added in migration)
+        if phase_description:
+            phase_data["description"] = phase_description
         
         try:
             response = supabase.table("phases").insert(phase_data).execute()
@@ -519,7 +530,8 @@ def process_journey(
     team_id: str,
     project_id: str,
     journey_data: Dict[str, Any],
-    attribute_map: Dict[str, str]
+    attribute_map: Dict[str, str],
+    sequence_order: Optional[int] = None
 ) -> Dict[str, int]:
     """Process a single journey (main or subjourney) and return stats."""
     stats = {
@@ -539,7 +551,8 @@ def process_journey(
         team_id,
         project_id,
         journey_data,
-        is_subjourney=is_subjourney
+        is_subjourney=is_subjourney,
+        sequence_order=sequence_order
     )
     
     if not journey_id:
@@ -691,13 +704,18 @@ def main():
     
     # Process each journey
     journey_stats = []
-    for journey_data in journeys:
+    for index, journey_data in enumerate(journeys, start=1):
+        # Only top-level journeys (not subjourneys) need sequence_order
+        is_subjourney = journey_data.get("is_subjourney", False)
+        journey_sequence_order = index if not is_subjourney else None
+        
         stats = process_journey(
             supabase,
             team_id,
             project_id,
             journey_data,
-            attribute_map
+            attribute_map,
+            sequence_order=journey_sequence_order
         )
         stats["journey_name"] = journey_data.get("name", "Untitled Journey")
         journey_stats.append(stats)
