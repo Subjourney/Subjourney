@@ -39,6 +39,11 @@ export interface UIState {
   isServiceBlueprintOpen: boolean;
   draggedBlueprintItem: unknown | null;
   isCenterWhenClicked: boolean;
+  // Canvas spacing settings
+  canvasNodeSep: number; // Vertical spacing between nodes in same column
+  canvasRankSep: number; // Horizontal spacing between columns (levels)
+  canvasMainJourneySep: number; // Extra spacing between rows (main journey + all descendants)
+  canvasSpacingPanelMinimized: boolean; // Whether the spacing control panel is minimized
 }
 
 /**
