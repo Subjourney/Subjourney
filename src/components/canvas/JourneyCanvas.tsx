@@ -477,44 +477,104 @@ function JourneyCanvasInner({
       preferDomMeasurements: true, // Read from data-width/data-height attributes
     })
       .then((layouted) => {
-        // Post-process: Ensure JourneyNode is on the left and NextNode is on the right
-        // Find JourneyNode and NextNode
-        const journeyNode = layouted.nodes.find(n => n.type === 'journey-node');
-        const nextNode = layouted.nodes.find(n => n.id.startsWith('next-'));
-        
-        if (journeyNode && nextNode) {
-          // Check if they're on the same layer (same Y position, within tolerance)
-          const yTolerance = 10; // Allow small vertical differences
-          const journeyY = journeyNode.position?.y || 0;
-          const nextY = nextNode.position?.y || 0;
-          const sameLayer = Math.abs(journeyY - nextY) < yTolerance;
-          
-          if (sameLayer) {
-            // Ensure JourneyNode is on the left (lower X) and NextNode is on the right (higher X)
-            const journeyX = journeyNode.position?.x || 0;
-            const nextX = nextNode.position?.x || 0;
+        // Update node width/height from actual DOM measurements
+        // This is critical for React Flow's fitView to work correctly
+        // React Flow uses node.width and node.height properties, not DOM attributes
+        const updateNodeSizes = (nodes: Node[]): Node[] => {
+          return nodes.map((node) => {
+            // Try to get actual measured size from DOM
+            const nodeElement = document.querySelector(
+              `[data-journey-node="true"][data-journey-id="${node.id}"]`
+            ) as HTMLElement | null;
             
-            if (journeyX > nextX) {
-              // Swap positions: JourneyNode should be on left
-              const journeyWidth = journeyNode.width || 400;
-              const spacing = 50; // Spacing between nodes
+            if (nodeElement) {
+              const measuredWidth = nodeElement.getAttribute('data-width');
+              const measuredHeight = nodeElement.getAttribute('data-height');
               
-              // Set JourneyNode to left position
-              journeyNode.position = {
-                ...journeyNode.position!,
-                x: nextX,
-              };
+              if (measuredWidth && measuredHeight) {
+                const width = parseInt(measuredWidth, 10);
+                const height = parseInt(measuredHeight, 10);
+                
+                // Only update if we got valid measurements
+                if (width > 0 && height > 0) {
+                  return {
+                    ...node,
+                    width,
+                    height,
+                  };
+                }
+              }
+            }
+            
+            // Fallback to existing width/height if measurement not available yet
+            return node;
+          });
+        };
+
+        // Post-process: Ensure JourneyNode is on the left and NextNode is on the right
+        const processNodePositions = (nodes: Node[]): void => {
+          const journeyNode = nodes.find(n => n.type === 'journey-node');
+          const nextNode = nodes.find(n => n.id.startsWith('next-'));
+          
+          if (journeyNode && nextNode) {
+            // Check if they're on the same layer (same Y position, within tolerance)
+            const yTolerance = 10; // Allow small vertical differences
+            const journeyY = journeyNode.position?.y || 0;
+            const nextY = nextNode.position?.y || 0;
+            const sameLayer = Math.abs(journeyY - nextY) < yTolerance;
+            
+            if (sameLayer) {
+              // Ensure JourneyNode is on the left (lower X) and NextNode is on the right (higher X)
+              const journeyX = journeyNode.position?.x || 0;
+              const nextX = nextNode.position?.x || 0;
               
-              // Set NextNode to right of JourneyNode
-              nextNode.position = {
-                ...nextNode.position!,
-                x: nextX + journeyWidth + spacing,
-              };
+              if (journeyX > nextX) {
+                // Swap positions: JourneyNode should be on left
+                const journeyWidth = journeyNode.width || 400;
+                const spacing = 50; // Spacing between nodes
+                
+                // Set JourneyNode to left position
+                journeyNode.position = {
+                  ...journeyNode.position!,
+                  x: nextX,
+                };
+                
+                // Set NextNode to right of JourneyNode
+                nextNode.position = {
+                  ...nextNode.position!,
+                  x: nextX + journeyWidth + spacing,
+                };
+              }
             }
           }
-        }
+        };
+
+        // Try to update sizes immediately
+        let updatedNodes = updateNodeSizes(layouted.nodes);
         
-        setNodes(layouted.nodes);
+        // Check if all nodes have valid measurements
+        const allMeasured = updatedNodes.every((node) => {
+          const nodeElement = document.querySelector(
+            `[data-journey-node="true"][data-journey-id="${node.id}"]`
+          ) as HTMLElement | null;
+          if (!nodeElement) return true; // If element doesn't exist, skip check
+          const w = nodeElement.getAttribute('data-width');
+          const h = nodeElement.getAttribute('data-height');
+          return w && h && parseInt(w, 10) > 0 && parseInt(h, 10) > 0;
+        });
+
+        if (!allMeasured) {
+          // Retry after DOM has had time to render and measure
+          setTimeout(() => {
+            updatedNodes = updateNodeSizes(layouted.nodes);
+            processNodePositions(updatedNodes);
+            setNodes(updatedNodes);
+          }, 150);
+        } else {
+          // All measurements available, process and set nodes
+          processNodePositions(updatedNodes);
+          setNodes(updatedNodes);
+        }
       })
       .catch((error) => {
         console.error('ELK layout error:', error);
@@ -531,14 +591,17 @@ function JourneyCanvasInner({
     }
   }, [currentJourney?.id]);
 
-  // Fit view after JourneyNode mounts and measured size is available
-  // Center the entire canvas (all nodes), using JourneyNode measurement as readiness signal
+  // Fit view after all nodes are measured and positioned
+  // Wait for JourneyNode and all JourneyOverviewNode components to be measured
   useEffect(() => {
     if (nodes.length === 0) return;
     
     // Find the JourneyNode (there's only ever one)
     const journeyNode = nodes.find((n) => n.type === 'journey-node');
     if (!journeyNode) return;
+
+    // Find all JourneyOverviewNode components (parent, next, subjourneys)
+    const overviewNodes = nodes.filter((n) => n.type === 'journey-overview-node');
 
     let rafId = 0;
     let cancelled = false;
@@ -549,11 +612,11 @@ function JourneyCanvasInner({
       if (cancelled) return;
       attempts += 1;
 
-      // Only check the JourneyNode measurement (not PortalNodes)
+      // Check JourneyNode measurement
       const journeyEl = document.querySelector(
         `[data-journey-node="true"][data-journey-id="${journeyNode.id}"]`
       ) as HTMLElement | null;
-      const isMeasured =
+      const journeyMeasured =
         !!journeyEl &&
         (() => {
           const w = parseInt(journeyEl.getAttribute('data-width') || '0', 10);
@@ -561,7 +624,29 @@ function JourneyCanvasInner({
           return w > 0 && h > 0;
         })();
 
-      if (isMeasured || attempts >= maxAttempts) {
+      // Check all JourneyOverviewNode measurements
+      const allOverviewNodesMeasured = overviewNodes.every((node) => {
+        const overviewEl = document.querySelector(
+          `[data-journey-node="true"][data-journey-id="${node.id}"]`
+        ) as HTMLElement | null;
+        if (!overviewEl) return false;
+        const w = parseInt(overviewEl.getAttribute('data-width') || '0', 10);
+        const h = parseInt(overviewEl.getAttribute('data-height') || '0', 10);
+        return w > 0 && h > 0;
+      });
+
+      // Wait for all nodes to be measured, or timeout
+      const allMeasured = journeyMeasured && (overviewNodes.length === 0 || allOverviewNodesMeasured);
+
+      // When there are overview nodes, ensure they're not all at the same position (0,0)
+      // This indicates ELK layout hasn't completed yet
+      const layoutComplete = overviewNodes.length === 0 || 
+        overviewNodes.some((node) => {
+          const pos = node.position;
+          return pos && (pos.x !== 0 || pos.y !== 0);
+        });
+
+      if ((allMeasured && layoutComplete) || attempts >= maxAttempts) {
         // Compute a custom center/zoom for phase/step selection
         const centerOnRect = (targetEl: HTMLElement, journeyElEl: HTMLElement, paddingMultiplier: number) => {
           const journeyNodeFlow = getNode(String(journeyNode.id));
@@ -651,7 +736,12 @@ function JourneyCanvasInner({
         } else {
           // No selection: only auto-fit on initial load, not on deselection
           if (isFittingView) {
-            fitView({ padding: 0.25, includeHiddenNodes: true });
+            // Adjust padding based on whether there are JourneyOverviewNode components
+            // When there are overview nodes, use standard padding
+            // When there are no overview nodes, use slightly more padding to avoid over-zooming
+            const hasOverviewNodes = overviewNodes.length > 0;
+            const padding = hasOverviewNodes ? 0.25 : 0.3;
+            fitView({ padding, includeHiddenNodes: true });
           }
         }
 
@@ -686,11 +776,11 @@ function JourneyCanvasInner({
   }, [nodes, fitView, selectedStep, selectedPhase, isFittingView]);
 
 
-  const onNodesChange = useCallback((changes: unknown[]) => {
+  const onNodesChange = useCallback((_changes: unknown[]) => {
     // Handle node changes (position updates, etc.)
   }, []);
 
-  const onEdgesChange = useCallback((changes: unknown[]) => {
+  const onEdgesChange = useCallback((_changes: unknown[]) => {
     // Handle edge changes
   }, []);
 

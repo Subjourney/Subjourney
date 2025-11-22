@@ -10,15 +10,17 @@ export interface LayoutOptions {
   direction?: 'TB' | 'LR' | 'BT' | 'RL';
   nodeSep?: number;
   rankSep?: number;
+  rowSep?: number; // Spacing between rows (main journeys and their descendants)
   marginX?: number;
   marginY?: number;
   preferDomMeasurements?: boolean;
 }
 
-const DEFAULT_OPTIONS: Required<LayoutOptions> = {
+const DEFAULT_OPTIONS: Required<Omit<LayoutOptions, 'rowSep'>> & { rowSep?: number } = {
   direction: 'TB',
   nodeSep: 50,
   rankSep: 100,
+  rowSep: undefined, // Optional - only used when edges are marked for row spacing
   marginX: 50,
   marginY: 50,
   preferDomMeasurements: true,
@@ -33,7 +35,8 @@ const elk = new ELK();
 function convertToElkGraph(
   nodes: Node[],
   edges: Edge[],
-  options: Required<LayoutOptions>
+  options: Required<Omit<LayoutOptions, 'rowSep'>> & { rowSep?: number },
+  mainJourneyIds?: Set<string>
 ): ElkNode {
   const children: ElkNode[] = nodes.map((node) => {
     let width = node.width || 300;
@@ -52,18 +55,37 @@ function convertToElkGraph(
       }
     }
 
-    return {
+    const elkNode: ElkNode = {
       id: String(node.id),
       width,
       height,
     };
+
+    // Force main journeys to layer 0 (leftmost) by setting high priority
+    // Higher priority nodes are placed earlier in the layout
+    if (mainJourneyIds && mainJourneyIds.has(String(node.id))) {
+      elkNode.layoutOptions = {
+        'elk.priority': '10', // High priority to ensure they're in first layer
+        'elk.layered.crossingMinimization.positionChoice.strategy': 'NODES',
+      };
+    }
+
+    return elkNode;
   });
 
-  const elkEdges: ElkExtendedEdge[] = edges.map((edge) => ({
-    id: edge.id,
-    sources: [String(edge.source)],
-    targets: [String(edge.target)],
-  }));
+  const elkEdges: ElkExtendedEdge[] = edges.map((edge) => {
+    const elkEdge: ElkExtendedEdge = {
+      id: edge.id,
+      sources: [String(edge.source)],
+      targets: [String(edge.target)],
+    };
+    
+    // All edges in layout should be tree edges (parent to child)
+    // No special handling needed - ELK will position them correctly in tree structure
+    // Sequential edges and continuation edges are excluded from layout
+    
+    return elkEdge;
+  });
 
   // Map direction to ELK direction
   const elkDirection = options.direction === 'TB' ? 'DOWN' : 
@@ -78,10 +100,13 @@ function convertToElkGraph(
       'elk.spacing.nodeNode': String(options.nodeSep),
       'elk.spacing.edgeNode': String(options.nodeSep),
       'elk.layered.spacing.nodeNodeBetweenLayers': String(options.rankSep),
-      'elk.layered.nodePlacement.strategy': 'SIMPLE', // Simple placement for cleaner hierarchy
+      'elk.layered.nodePlacement.strategy': 'SIMPLE', // Simple placement for cleaner tree hierarchy
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP', // Minimize edge crossings
       'elk.layered.crossingMinimization.forceNodeModelOrder': 'true', // Force ELK to respect the order of nodes in the array
       'elk.considerModelOrder.strategy': 'NODES_AND_EDGES', // Respect the order of nodes in the array
+      // Tree-specific optimizations
+      'elk.layered.cycleBreaking.strategy': 'GREEDY', // Break any cycles (shouldn't exist in trees, but safety)
+      'elk.layered.layering.strategy': 'INTERACTIVE', // Good for tree structures
       'elk.padding': `[left=${options.marginX}, top=${options.marginY}, right=${options.marginX}, bottom=${options.marginY}]`,
     },
     children,
@@ -95,12 +120,13 @@ function convertToElkGraph(
 export async function applyElkLayout(
   nodes: Node[],
   edges: Edge[],
-  options: LayoutOptions = {}
+  options: LayoutOptions = {},
+  mainJourneyIds?: Set<string>
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   // Convert to ELK graph format
-  const elkGraph = convertToElkGraph(nodes, edges, opts);
+  const elkGraph = convertToElkGraph(nodes, edges, opts, mainJourneyIds);
 
   // Run ELK layout
   const layoutedGraph = await elk.layout(elkGraph);
